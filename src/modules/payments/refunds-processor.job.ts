@@ -1,5 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -7,6 +6,7 @@ import { PaymentsService } from './payments.service';
 
 /** Max REFUND_PENDING bookings processed per run — keeps a repeated sweep cheap. */
 const REFUND_BATCH_SIZE = 200;
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 /**
  * Frequent sweep (every 5 minutes — refunds are more time-sensitive than the
@@ -23,17 +23,34 @@ const REFUND_BATCH_SIZE = 200;
  * idempotent (guarded updateMany keyed on the payment's current status), so
  * re-running this sweep on a booking already refunded by the manual admin
  * endpoint is a no-op, not a double-refund.
+ *
+ * Deliberately NOT using @nestjs/schedule: that package ships ESM-only
+ * ("type": "module") and this app compiles to CommonJS, so `require()`-ing
+ * it crashes on any Node runtime without CJS-require-of-ESM support
+ * (confirmed broken on Vercel's Node runtime). A plain setInterval has no
+ * such dependency. Only meaningful on a persistent process (the existing
+ * Docker/Cloud-Run deploy) — on Vercel serverless this never fires at all,
+ * which is why the equivalent logic is also exposed via a secured HTTP
+ * endpoint for Vercel Cron to call instead.
  */
 @Injectable()
-export class RefundsProcessorJob {
+export class RefundsProcessorJob implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RefundsProcessorJob.name);
+  private timer?: ReturnType<typeof setInterval>;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly payments: PaymentsService,
   ) {}
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  onModuleInit() {
+    this.timer = setInterval(() => void this.handleRefundPendingBookings(), FIVE_MINUTES_MS);
+  }
+
+  onModuleDestroy() {
+    if (this.timer) clearInterval(this.timer);
+  }
+
   async handleRefundPendingBookings() {
     const pending = await this.prisma.booking.findMany({
       where: { paymentStatus: 'REFUND_PENDING' },
