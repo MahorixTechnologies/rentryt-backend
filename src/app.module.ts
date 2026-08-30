@@ -12,6 +12,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
+import { CronModule } from './modules/cron/cron.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
 import { ListingsModule } from './modules/listings/listings.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -38,6 +39,7 @@ import { UsersModule } from './modules/users/users.module';
     ReportsModule,
     DisputesModule,
     AdminModule,
+    CronModule,
   ],
   controllers: [AppController],
   providers: [

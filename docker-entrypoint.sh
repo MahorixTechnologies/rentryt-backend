@@ -8,4 +8,4 @@ echo "Seeding database (idempotent)..."
 npx prisma db seed || true
 
 echo "Starting Nest.js server..."
-exec node dist/main
+exec node dist/src/main

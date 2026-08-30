@@ -11,6 +11,8 @@ import { BookingsService } from './bookings.service';
   imports: [NotificationsModule],
   controllers: [BookingsController],
   providers: [BookingsService, FeeRulesService, BookingsExpiryJob],
-  exports: [BookingsService],
+  // BookingsExpiryJob exported so CronModule can invoke
+  // handleExpiredPendingBookings() directly from the Vercel Cron HTTP endpoint.
+  exports: [BookingsService, BookingsExpiryJob],
 })
 export class BookingsModule {}

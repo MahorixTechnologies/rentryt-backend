@@ -23,8 +23,10 @@ import { RefundsProcessorJob } from './refunds-processor.job';
     FeeRulesService,
     RefundsProcessorJob,
   ],
-  // Exported so AdminModule can reuse PaymentsService.refund for the manual
-  // POST /admin/payments/:id/refund endpoint instead of duplicating it.
-  exports: [PaymentsService],
+  // PaymentsService exported so AdminModule can reuse PaymentsService.refund
+  // for the manual POST /admin/payments/:id/refund endpoint instead of
+  // duplicating it. RefundsProcessorJob exported so CronModule can invoke
+  // handleRefundPendingBookings() directly from the Vercel Cron HTTP endpoint.
+  exports: [PaymentsService, RefundsProcessorJob],
 })
 export class PaymentsModule {}
