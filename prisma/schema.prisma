@@ -19,19 +19,10 @@ enum UserStatus {
 }
 
 enum ListingStatus {
-  Draft
-  PendingVerification
-  Ready
   PENDING
   APPROVED
-  Published
-  Unavailable
-  ARCHIVED
-  Archived
   REJECTED
-  Rejected
-  Suspended
-  Expired
+  ARCHIVED
 }
 
 enum ListingType {
@@ -61,6 +52,8 @@ enum TokenType {
 enum BookingStatus {
   PENDING
   CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
   REJECTED
   CANCELLED
   COMPLETED
@@ -69,92 +62,181 @@ enum BookingStatus {
 enum PaymentStatus {
   UNPAID
   PAID
+  REFUND_PENDING
   REFUNDED
 }
 
-model User {
-  id            String      @id @default(uuid())
-  email         String      @unique
-  passwordHash  String
-  role          UserRole    @default(RENTER)
-  status        UserStatus  @default(ACTIVE)
-  emailVerified Boolean     @default(false)
-  name          String?
-  phone         String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+enum OwnerApplicationStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
 
-  listings      Listing[]   @relation("OwnerListings")
-  bookings      Booking[]   @relation("RenterBookings")
-  reviews       Review[]
-  tokens        Token[]
+enum ReviewModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReportTargetType {
+  LISTING
+  USER
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+enum PaymentProvider {
+  PAYSTACK
+  FLUTTERWAVE
+}
+
+enum PaymentPurpose {
+  BOOKING
+  FEATURED_LISTING
+}
+
+enum PaymentTxStatus {
+  INITIATED
+  SUCCESSFUL
+  FAILED
+  REFUNDED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+}
+
+model User {
+  id                     String                 @id @default(uuid())
+  email                  String                 @unique
+  passwordHash           String
+  role                   UserRole               @default(RENTER)
+  status                 UserStatus             @default(ACTIVE)
+  emailVerified          Boolean                @default(false)
+  name                   String?
+  phone                  String?
+  ownerApplicationStatus OwnerApplicationStatus @default(NONE)
+  ownerApplicationAt     DateTime?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  listings  Listing[]  @relation("OwnerListings")
+  bookings  Booking[]  @relation("RenterBookings")
+  reviews   Review[]
+  tokens    Token[]
+  auditLogs AuditLog[] @relation("ActorAuditLogs")
+
+  reportsFiled    Report[]       @relation("ReporterReports")
+  reportsResolved Report[]       @relation("ResolverReports")
+  disputesRaised  Dispute[]      @relation("RaiserDisputes")
+  disputesDecided Dispute[]      @relation("DeciderDisputes")
+  feeRulesUpdated FeeRule[]      @relation("FeeRuleUpdatedBy")
+  paymentsMade    Payment[]      @relation("PayerPayments")
+  notifications   Notification[]
+  payoutAccount   PayoutAccount?
+  payouts         Payout[]       @relation("OwnerPayouts")
+
+  conversationsAsRenter Conversation[] @relation("RenterConversations")
+  conversationsAsOwner  Conversation[] @relation("OwnerConversations")
+  messagesSent          Message[]      @relation("SenderMessages")
+
+  @@index([ownerApplicationStatus])
 }
 
 model Listing {
-  id            String        @id @default(uuid())
-  ownerId       String
-  owner         User          @relation("OwnerListings", fields: [ownerId], references: [id])
-  status        ListingStatus @default(PENDING)
+  id      String        @id @default(uuid())
+  ownerId String
+  owner   User          @relation("OwnerListings", fields: [ownerId], references: [id])
+  status  ListingStatus @default(PENDING)
 
   title         String
   description   String
   location      String
   pricePerNight Int
-  currency      Currency      @default(NGN)
+  currency      Currency    @default(NGN)
   rooms         Int
   bathrooms     Int
   type          ListingType
   images        String[]
   amenities     String[]
   rules         String[]
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  featured      Boolean     @default(false)
+  featuredUntil DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   bookings      Booking[]
   reviews       Review[]
+  payments      Payment[]
+  conversations Conversation[]
 
   @@index([ownerId])
   @@index([status])
   @@index([location])
+  @@index([featured])
 }
 
 model Booking {
-  id            String        @id @default(uuid())
-  listingId     String
-  listing       Listing       @relation(fields: [listingId], references: [id])
-  renterId      String
-  renter        User          @relation("RenterBookings", fields: [renterId], references: [id])
+  id        String  @id @default(uuid())
+  listingId String
+  listing   Listing @relation(fields: [listingId], references: [id])
+  renterId  String
+  renter    User    @relation("RenterBookings", fields: [renterId], references: [id])
 
-  startDate     DateTime
-  endDate       DateTime
-  nights        Int
-  subtotal      Int
-  serviceFee    Int
-  total         Int
+  startDate  DateTime
+  endDate    DateTime
+  nights     Int
+  subtotal   Int
+  serviceFee Int
+  total      Int
 
   status        BookingStatus @default(PENDING)
   paymentStatus PaymentStatus @default(UNPAID)
 
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  disputes      Dispute[]
+  payments      Payment[]
+  payouts       Payout[]
+  conversations Conversation[]
 
   @@index([listingId])
   @@index([renterId])
+  @@index([status, startDate])
 }
 
 model Review {
-  id        String   @id @default(uuid())
-  listingId String
-  listing   Listing  @relation(fields: [listingId], references: [id])
-  renterId  String
-  renter    User     @relation(fields: [renterId], references: [id])
-  rating    Int
-  body      String
-  createdAt DateTime @default(now())
+  id               String                 @id @default(uuid())
+  listingId        String
+  listing          Listing                @relation(fields: [listingId], references: [id])
+  renterId         String
+  renter           User                   @relation(fields: [renterId], references: [id])
+  rating           Int
+  body             String
+  ownerResponse    String?
+  moderationStatus ReviewModerationStatus @default(APPROVED)
+  createdAt        DateTime               @default(now())
 
+  @@unique([listingId, renterId])
   @@index([listingId])
   @@index([renterId])
-  @@unique([listingId, renterId])
+  @@index([moderationStatus])
 }
 
 model Token {
@@ -170,4 +252,220 @@ model Token {
   @@index([userId])
   @@index([type])
   @@index([userId, type])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation("ActorAuditLogs", fields: [actorId], references: [id])
+  action     String
+  targetType String
+  targetId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+model Report {
+  id             String           @id @default(uuid())
+  reporterId     String
+  reporter       User             @relation("ReporterReports", fields: [reporterId], references: [id])
+  targetType     ReportTargetType
+  targetId       String
+  reason         String
+  details        String?
+  status         ReportStatus     @default(OPEN)
+  resolvedById   String?
+  resolvedBy     User?            @relation("ResolverReports", fields: [resolvedById], references: [id])
+  resolutionNote String?
+  createdAt      DateTime         @default(now())
+  resolvedAt     DateTime?
+
+  @@index([reporterId])
+  @@index([status])
+  @@index([targetType, targetId])
+}
+
+model Dispute {
+  id              String        @id @default(uuid())
+  bookingId       String
+  booking         Booking       @relation(fields: [bookingId], references: [id])
+  raisedById      String
+  raisedBy        User          @relation("RaiserDisputes", fields: [raisedById], references: [id])
+  reason          String
+  status          DisputeStatus @default(OPEN)
+  resolutionNotes String?
+  decidedById     String?
+  decidedBy       User?         @relation("DeciderDisputes", fields: [decidedById], references: [id])
+  decidedAt       DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@index([bookingId])
+  @@index([raisedById])
+  @@index([status])
+}
+
+model Payment {
+  id                    String          @id @default(uuid())
+  purpose               PaymentPurpose
+  bookingId             String?
+  booking               Booking?        @relation(fields: [bookingId], references: [id])
+  listingId             String?
+  listing               Listing?        @relation(fields: [listingId], references: [id])
+  payerId               String
+  payer                 User            @relation("PayerPayments", fields: [payerId], references: [id])
+  provider              PaymentProvider
+  reference             String          @unique
+  providerTransactionId String?
+  amount                Int
+  currency              Currency
+  status                PaymentTxStatus @default(INITIATED)
+  rawPayload            Json?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  @@index([bookingId])
+  @@index([listingId])
+  @@index([reference])
+}
+
+/**
+ * `type` is a plain string, not an enum, so new notification-triggering
+ * events (added over time as more of the product is wired up) don't need a
+ * migration — see NotificationType in notifications.service.ts for the
+ * documented set of values in use.
+ */
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  title     String
+  body      String
+  data      Json?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+model FeeRule {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       Float
+  description String
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+  updatedBy   User?    @relation("FeeRuleUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([key])
+}
+
+/**
+ * One payout account per landlord (for now — hence the unique ownerId).
+ * Paystack requires creating a "transfer recipient" up front
+ * (POST /transferrecipient) whose recipient_code is stored in
+ * providerRecipientId for later transfers; Flutterwave's transfer API takes
+ * raw bank details per-transfer with no separate recipient step, so
+ * providerRecipientId stays null for Flutterwave accounts. See
+ * PayoutsService.setup for the branch handling this difference.
+ */
+model PayoutAccount {
+  id                  String          @id @default(uuid())
+  ownerId             String          @unique
+  owner               User            @relation(fields: [ownerId], references: [id])
+  provider            PaymentProvider
+  bankCode            String
+  accountNumber       String
+  accountName         String
+  providerRecipientId String?
+  verified            Boolean         @default(false)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
+/**
+ * One row per owner money-movement event, normally tied to a single
+ * COMPLETED + PAID booking (auto-created by BookingsService.checkOut) but
+ * bookingId is nullable for flexibility (e.g. a future ad-hoc payout).
+ * PENDING rows sit until an admin explicitly triggers
+ * POST /admin/payouts/:id/process — deliberately not automatic, since a
+ * human should review a real transfer before it fires.
+ */
+model Payout {
+  id                 String          @id @default(uuid())
+  ownerId            String
+  owner              User            @relation("OwnerPayouts", fields: [ownerId], references: [id])
+  bookingId          String?
+  booking            Booking?        @relation(fields: [bookingId], references: [id])
+  amount             Int
+  currency           Currency
+  status             PayoutStatus    @default(PENDING)
+  provider           PaymentProvider
+  reference          String          @unique
+  providerTransferId String?
+  rawPayload         Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  paidAt             DateTime?
+
+  @@index([ownerId])
+  @@index([bookingId])
+  @@index([status])
+}
+
+/**
+ * Renter <-> owner in-app chat thread, tied to a listing inquiry or an
+ * existing booking (at least one of listingId/bookingId is set — enforced in
+ * ConversationsService, not at the DB level, since Prisma has no CHECK
+ * constraint shorthand for "at least one of two nullable columns").
+ * Duplicate-thread prevention: Postgres unique constraints treat NULL as
+ * distinct from NULL, so `@@unique([renterId, listingId])` only collides
+ * when both threads share the same non-null listingId (i.e. never collides
+ * across two booking-based rows, which both have listingId = null) — same
+ * reasoning for `@@unique([renterId, bookingId])`. Together the two
+ * constraints guard "one thread per renter per listing" and "one thread per
+ * renter per booking" without needing a partial/filtered unique index.
+ * ConversationsService still does a read-check-then-create with a
+ * catch-and-refetch on P2002 for the race case.
+ */
+model Conversation {
+  id        String   @id @default(uuid())
+  listingId String?
+  listing   Listing? @relation(fields: [listingId], references: [id])
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id])
+  renterId  String
+  renter    User     @relation("RenterConversations", fields: [renterId], references: [id])
+  ownerId   String
+  owner     User     @relation("OwnerConversations", fields: [ownerId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+
+  @@unique([renterId, listingId])
+  @@unique([renterId, bookingId])
+  @@index([ownerId])
+  @@index([listingId])
+  @@index([bookingId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  senderId       String
+  sender         User         @relation("SenderMessages", fields: [senderId], references: [id])
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+  @@index([conversationId, createdAt])
 }

@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 
 import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
+import { isListingPublic } from '../../common/listings/listing-visibility';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -13,15 +14,12 @@ export class ReviewsService {
       where: { id: listingId },
       select: { id: true, status: true },
     });
-    if (
-      !listing ||
-      (listing.status !== 'APPROVED' && listing.status !== 'Published')
-    ) {
+    if (!listing || !isListingPublic(listing.status)) {
       throw new NotFoundException('listing not found');
     }
 
     return await this.prisma.review.findMany({
-      where: { listingId },
+      where: { listingId, moderationStatus: { not: 'REJECTED' } },
       orderBy: { createdAt: 'desc' },
       include: { renter: { select: { id: true, name: true } } },
     });
@@ -48,7 +46,7 @@ export class ReviewsService {
       where: { id: listingId },
       select: { id: true, status: true },
     });
-    if (!listing || listing.status !== 'APPROVED') throw new NotFoundException('listing not found');
+    if (!listing || !isListingPublic(listing.status)) throw new NotFoundException('listing not found');
 
     const booking = await this.prisma.booking.findFirst({
       where: {
@@ -71,6 +69,33 @@ export class ReviewsService {
         rating,
         body: text,
       },
+    });
+  }
+
+  async respondAsOwner(
+    owner: AuthUser,
+    listingId: string,
+    reviewId: string,
+    response: string,
+  ) {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+      select: { id: true, ownerId: true },
+    });
+    if (!listing) throw new NotFoundException('listing not found');
+
+    if (owner.role !== UserRole.LANDLORD || owner.id !== listing.ownerId) {
+      throw new ForbiddenException('only the listing owner can respond to reviews');
+    }
+
+    const review = await this.prisma.review.findUnique({ where: { id: reviewId } });
+    if (!review || review.listingId !== listingId) {
+      throw new NotFoundException('review not found');
+    }
+
+    return await this.prisma.review.update({
+      where: { id: reviewId },
+      data: { ownerResponse: response },
     });
   }
 }

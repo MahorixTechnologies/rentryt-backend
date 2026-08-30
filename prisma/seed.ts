@@ -67,6 +67,7 @@ type ListingSeed = {
   imageSeed: string;
   amenities: string[];
   rules: string[];
+  featured?: boolean;
 };
 
 async function ensureListing(data: ListingSeed) {
@@ -211,6 +212,7 @@ async function main() {
         'Security',
       ],
       rules: ['No smoking', 'No parties', 'Government ID required'],
+      featured: true,
     },
     {
       id: '00000000-0000-0000-0000-000000000005',
@@ -228,6 +230,7 @@ async function main() {
       imageSeed: 'bluerock-palmview-house',
       amenities: ['Pool terrace', 'Fire pit', 'Outdoor lounge', 'Backup power'],
       rules: ['No pets', 'No events'],
+      featured: true,
     },
     {
       id: '00000000-0000-0000-0000-000000000006',
@@ -339,6 +342,7 @@ async function main() {
         'Parking',
       ],
       rules: ['No parties', 'Government ID required', 'No smoking'],
+      featured: true,
     },
   ];
 
@@ -488,6 +492,142 @@ async function main() {
     select: { id: true, listingId: true, renterId: true },
   });
 
+  const report1 = await prisma.report.upsert({
+    where: { id: '00000000-0000-0000-0000-0000000000p1' },
+    update: {
+      reporterId: renter2.id,
+      targetType: 'LISTING',
+      targetId: listings[2].id,
+      reason: 'Misleading photos',
+      details: 'The photos shown do not match the actual unit condition.',
+      status: 'OPEN',
+      resolvedById: null,
+      resolutionNote: null,
+      resolvedAt: null,
+    },
+    create: {
+      id: '00000000-0000-0000-0000-0000000000p1',
+      reporterId: renter2.id,
+      targetType: 'LISTING',
+      targetId: listings[2].id,
+      reason: 'Misleading photos',
+      details: 'The photos shown do not match the actual unit condition.',
+      status: 'OPEN',
+    },
+    select: { id: true, status: true },
+  });
+
+  const report2 = await prisma.report.upsert({
+    where: { id: '00000000-0000-0000-0000-0000000000p2' },
+    update: {
+      reporterId: renter.id,
+      targetType: 'USER',
+      targetId: landlord2.id,
+      reason: 'Host unresponsive after booking confirmed',
+      details: 'Tried contacting the host multiple times with no reply.',
+      status: 'RESOLVED',
+      resolvedById: admin.id,
+      resolutionNote: 'Reached out to host directly; issue addressed.',
+      resolvedAt: new Date(),
+    },
+    create: {
+      id: '00000000-0000-0000-0000-0000000000p2',
+      reporterId: renter.id,
+      targetType: 'USER',
+      targetId: landlord2.id,
+      reason: 'Host unresponsive after booking confirmed',
+      details: 'Tried contacting the host multiple times with no reply.',
+      status: 'RESOLVED',
+      resolvedById: admin.id,
+      resolutionNote: 'Reached out to host directly; issue addressed.',
+      resolvedAt: new Date(),
+    },
+    select: { id: true, status: true },
+  });
+
+  const report3 = await prisma.report.upsert({
+    where: { id: '00000000-0000-0000-0000-0000000000p3' },
+    update: {
+      reporterId: landlord.id,
+      targetType: 'USER',
+      targetId: renter2.id,
+      reason: 'Suspicious repeated booking cancellations',
+      details: null,
+      status: 'DISMISSED',
+      resolvedById: admin.id,
+      resolutionNote: 'Reviewed booking history; no policy violation found.',
+      resolvedAt: new Date(),
+    },
+    create: {
+      id: '00000000-0000-0000-0000-0000000000p3',
+      reporterId: landlord.id,
+      targetType: 'USER',
+      targetId: renter2.id,
+      reason: 'Suspicious repeated booking cancellations',
+      status: 'DISMISSED',
+      resolvedById: admin.id,
+      resolutionNote: 'Reviewed booking history; no policy violation found.',
+      resolvedAt: new Date(),
+    },
+    select: { id: true, status: true },
+  });
+
+  const dispute1 = await prisma.dispute.upsert({
+    where: { id: '00000000-0000-0000-0000-0000000000d1' },
+    update: {
+      bookingId: booking1.id,
+      raisedById: renter.id,
+      reason: 'Property was not as described - missing amenities promised in the listing.',
+      status: 'OPEN',
+      resolutionNotes: null,
+      decidedById: null,
+      decidedAt: null,
+    },
+    create: {
+      id: '00000000-0000-0000-0000-0000000000d1',
+      bookingId: booking1.id,
+      raisedById: renter.id,
+      reason: 'Property was not as described - missing amenities promised in the listing.',
+      status: 'OPEN',
+    },
+    select: { id: true, status: true },
+  });
+
+  const dispute2 = await prisma.dispute.upsert({
+    where: { id: '00000000-0000-0000-0000-0000000000d2' },
+    update: {
+      bookingId: booking4.id,
+      raisedById: landlord.id,
+      reason: 'Renter cancelled last minute and is disputing the refund amount.',
+      status: 'RESOLVED',
+      resolutionNotes: 'Refund amount confirmed correct per cancellation policy.',
+      decidedById: admin.id,
+      decidedAt: new Date(),
+    },
+    create: {
+      id: '00000000-0000-0000-0000-0000000000d2',
+      bookingId: booking4.id,
+      raisedById: landlord.id,
+      reason: 'Renter cancelled last minute and is disputing the refund amount.',
+      status: 'RESOLVED',
+      resolutionNotes: 'Refund amount confirmed correct per cancellation policy.',
+      decidedById: admin.id,
+      decidedAt: new Date(),
+    },
+    select: { id: true, status: true },
+  });
+
+  const serviceFeeRule = await prisma.feeRule.upsert({
+    where: { key: 'SERVICE_FEE_PERCENT' },
+    update: {},
+    create: {
+      key: 'SERVICE_FEE_PERCENT',
+      value: 10,
+      description: 'Platform service fee charged to renters on each booking',
+    },
+    select: { id: true, key: true, value: true },
+  });
+
   const reviews = await prisma.review.createMany({
     data: [
       {
@@ -554,6 +694,9 @@ async function main() {
     listings,
     bookings: [booking1, booking2, booking3, booking4],
     reviewCount: reviews.count,
+    reports: [report1, report2, report3],
+    disputes: [dispute1, dispute2],
+    feeRules: [serviceFeeRule],
     tokens,
   };
 }

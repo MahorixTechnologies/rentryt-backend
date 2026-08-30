@@ -1,12 +1,53 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import type { OwnerApplicationStatus } from '@prisma/client';
 
+import { recordAuditLog } from '../../common/audit/audit-log';
 import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ConversationsService } from '../conversations/conversations.service';
+import { PaymentsService } from '../payments/payments.service';
+import { PayoutsService } from '../payouts/payouts.service';
+
+const TRENDS_WEEKS = 12;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MS_PER_WEEK = 7 * MS_PER_DAY;
+
+/** Returns the UTC Monday 00:00:00 that begins the week containing `date`. */
+function startOfWeekUTC(date: Date): Date {
+  const day = date.getUTCDay(); // 0 = Sunday ... 6 = Saturday
+  const offsetFromMonday = day === 0 ? 6 : day - 1;
+  const monday = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+  monday.setUTCDate(monday.getUTCDate() - offsetFromMonday);
+  return monday;
+}
+
+function toIsoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+const OWNER_APPLICATION_STATUSES: readonly OwnerApplicationStatus[] = [
+  'NONE',
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+];
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly payments: PaymentsService,
+    private readonly payouts: PayoutsService,
+    private readonly conversations: ConversationsService,
+  ) {}
 
   private ensureAdmin(user: AuthUser) {
     if (user.role !== UserRole.ADMIN) {
@@ -144,10 +185,257 @@ export class AdminService {
 
   async setUserStatus(user: AuthUser, userId: string, status: 'ACTIVE' | 'SUSPENDED') {
     this.ensureAdmin(user);
-    return await this.prisma.user.update({
+
+    const before = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, status: true },
+    });
+    if (!before) {
+      throw new NotFoundException('user not found');
+    }
+
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: { status },
       select: { id: true, email: true, status: true },
     });
+
+    await recordAuditLog(this.prisma, {
+      actorId: user.id,
+      action: 'USER_STATUS_CHANGE',
+      targetType: 'User',
+      targetId: userId,
+      metadata: { from: before.status, to: status },
+    });
+
+    return updated;
+  }
+
+  async ownerApplications(user: AuthUser, status?: string) {
+    this.ensureAdmin(user);
+
+    const filterStatus: OwnerApplicationStatus = OWNER_APPLICATION_STATUSES.includes(
+      status as OwnerApplicationStatus,
+    )
+      ? (status as OwnerApplicationStatus)
+      : 'PENDING';
+
+    return await this.prisma.user.findMany({
+      where: { ownerApplicationStatus: filterStatus },
+      orderBy: { ownerApplicationAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        role: true,
+        ownerApplicationStatus: true,
+        ownerApplicationAt: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async decideOwnerApplication(admin: AuthUser, userId: string, decision: 'APPROVE' | 'REJECT') {
+    this.ensureAdmin(admin);
+
+    const target = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, ownerApplicationStatus: true },
+    });
+    if (!target) {
+      throw new NotFoundException('user not found');
+    }
+    if (target.ownerApplicationStatus !== 'PENDING') {
+      throw new BadRequestException('user does not have a pending owner application');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data:
+        decision === 'APPROVE'
+          ? { role: UserRole.LANDLORD, ownerApplicationStatus: 'APPROVED' }
+          : { ownerApplicationStatus: 'REJECTED' },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        ownerApplicationStatus: true,
+        ownerApplicationAt: true,
+      },
+    });
+
+    await recordAuditLog(this.prisma, {
+      actorId: admin.id,
+      action: 'OWNER_APPLICATION_DECISION',
+      targetType: 'User',
+      targetId: userId,
+      metadata: {
+        decision,
+        fromRole: target.role,
+        toRole: updated.role,
+      },
+    });
+
+    return updated;
+  }
+
+  async moderateReview(admin: AuthUser, reviewId: string, status: 'APPROVED' | 'REJECTED') {
+    this.ensureAdmin(admin);
+
+    const before = await this.prisma.review.findUnique({
+      where: { id: reviewId },
+      select: { id: true, moderationStatus: true },
+    });
+    if (!before) {
+      throw new NotFoundException('review not found');
+    }
+
+    const updated = await this.prisma.review.update({
+      where: { id: reviewId },
+      data: { moderationStatus: status },
+    });
+
+    await recordAuditLog(this.prisma, {
+      actorId: admin.id,
+      action: 'REVIEW_MODERATION',
+      targetType: 'Review',
+      targetId: reviewId,
+      metadata: { from: before.moderationStatus, to: status },
+    });
+
+    return updated;
+  }
+
+  async auditLogs(user: AuthUser, limitParam?: string) {
+    this.ensureAdmin(user);
+
+    const parsed = limitParam != null ? Number(limitParam) : NaN;
+    const limit = Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.trunc(parsed), 200) : 50;
+
+    return await this.prisma.auditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        actor: { select: { id: true, email: true, name: true, role: true } },
+      },
+    });
+  }
+
+  async feeRules(user: AuthUser) {
+    this.ensureAdmin(user);
+    return await this.prisma.feeRule.findMany({ orderBy: { key: 'asc' } });
+  }
+
+  async updateFeeRule(admin: AuthUser, key: string, value: number) {
+    this.ensureAdmin(admin);
+
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
+      throw new BadRequestException('value must be a number between 0 and 100');
+    }
+
+    const before = await this.prisma.feeRule.findUnique({ where: { key } });
+    if (!before) {
+      throw new NotFoundException('fee rule not found');
+    }
+
+    const updated = await this.prisma.feeRule.update({
+      where: { key },
+      data: { value, updatedById: admin.id },
+    });
+
+    await recordAuditLog(this.prisma, {
+      actorId: admin.id,
+      action: 'FEE_RULE_UPDATE',
+      targetType: 'FeeRule',
+      targetId: updated.id,
+      metadata: { key, from: before.value, to: value },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Manual refund trigger (e.g. a dispute resolution needing intervention
+   * outside the automatic cancelled-booking sweep). Delegates entirely to
+   * PaymentsService.refund — the same method RefundsProcessorJob calls for
+   * automatic refunds — which does the real provider call, the guarded
+   * status flip, the audit log, and the payer notification. No duplicate
+   * audit-log call here: PaymentsService.refund already records
+   * PAYMENT_REFUNDED with this admin's actorId.
+   */
+  async refundPayment(admin: AuthUser, paymentId: string) {
+    this.ensureAdmin(admin);
+    return await this.payments.refund({ paymentId, actorId: admin.id });
+  }
+
+  /**
+   * Manual, admin-only trigger for a real owner payout — see
+   * PayoutsService.process for the provider transfer call, the
+   * PENDING/FAILED -> PROCESSING -> PAID/FAILED transition, the audit log,
+   * and the owner notification.
+   */
+  async processPayout(admin: AuthUser, payoutId: string) {
+    this.ensureAdmin(admin);
+    return await this.payouts.process(admin, payoutId);
+  }
+
+  /**
+   * Weekly booking counts + revenue for roughly the last TRENDS_WEEKS weeks,
+   * plus a breakdown of current booking counts by status. See report for
+   * exact response shape.
+   */
+  async analyticsTrends(user: AuthUser) {
+    this.ensureAdmin(user);
+
+    const currentWeekStart = startOfWeekUTC(new Date());
+    const earliestWeekStart = new Date(
+      currentWeekStart.getTime() - (TRENDS_WEEKS - 1) * MS_PER_WEEK,
+    );
+
+    const [recentBookings, statusGroups] = await Promise.all([
+      this.prisma.booking.findMany({
+        where: { createdAt: { gte: earliestWeekStart } },
+        select: { createdAt: true, total: true },
+      }),
+      this.prisma.booking.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+      }),
+    ]);
+
+    const buckets = new Map<string, { weekStart: string; count: number; revenue: number }>();
+    for (let i = 0; i < TRENDS_WEEKS; i++) {
+      const weekStart = new Date(earliestWeekStart.getTime() + i * MS_PER_WEEK);
+      const key = toIsoDate(weekStart);
+      buckets.set(key, { weekStart: key, count: 0, revenue: 0 });
+    }
+
+    for (const booking of recentBookings) {
+      const key = toIsoDate(startOfWeekUTC(booking.createdAt));
+      const bucket = buckets.get(key);
+      if (bucket) {
+        bucket.count += 1;
+        bucket.revenue += booking.total;
+      }
+    }
+
+    const series = Array.from(buckets.values());
+    const statusBreakdown = statusGroups.map((group) => ({
+      status: group.status,
+      count: group._count._all,
+    }));
+
+    return { series, statusBreakdown };
+  }
+
+  /**
+   * Read-only support visibility into a conversation — see
+   * ConversationsService.getMessagesForAdmin. Deliberately no admin write
+   * path exists anywhere under /admin/conversations.
+   */
+  async conversationMessages(user: AuthUser, conversationId: string) {
+    this.ensureAdmin(user);
+    return await this.conversations.getMessagesForAdmin(conversationId);
   }
 }

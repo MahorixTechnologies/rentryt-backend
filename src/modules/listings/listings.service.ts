@@ -5,9 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { recordAuditLog } from '../../common/audit/audit-log';
 import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
+import { isFeaturedActive, isListingPublic } from '../../common/listings/listing-visibility';
 import { PrismaService } from '../../prisma/prisma.service';
+
+const FEATURED_LISTING_DURATION_DAYS = 30;
 
 type CreateListingInput = {
   title: string;
@@ -68,9 +72,9 @@ export class ListingsService {
         ? (params.type as CreateListingInput['type'])
         : undefined;
 
-    return await this.prisma.listing.findMany({
+    const listings = await this.prisma.listing.findMany({
       where: {
-        status: { in: ['APPROVED', 'Published'] },
+        status: 'APPROVED',
         ...(q
           ? {
               OR: [
@@ -98,11 +102,15 @@ export class ListingsService {
         images: true,
         amenities: true,
         status: true,
+        featured: true,
+        featuredUntil: true,
         owner: { select: { id: true, name: true, phone: true } },
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return listings.map((listing) => ({ ...listing, featured: isFeaturedActive(listing) }));
   }
 
   async listMine(owner: AuthUser) {
@@ -129,16 +137,14 @@ export class ListingsService {
 
     if (!listing) throw new NotFoundException('listing not found');
 
-    const isPublic =
-      listing.status === 'APPROVED' || listing.status === 'Published';
-    if (!isPublic) {
+    if (!isListingPublic(listing.status)) {
       if (!viewer) throw new NotFoundException('listing not found');
       if (viewer.role !== UserRole.ADMIN && viewer.id !== listing.ownerId) {
         throw new NotFoundException('listing not found');
       }
     }
 
-    return listing;
+    return { ...listing, featured: isFeaturedActive(listing) };
   }
 
   async create(owner: AuthUser, input: CreateListingInput) {
@@ -195,6 +201,19 @@ export class ListingsService {
     });
   }
 
+  async appendImages(owner: AuthUser, id: string, urls: string[]) {
+    const listing = await this.prisma.listing.findUnique({ where: { id } });
+    if (!listing) throw new NotFoundException('listing not found');
+    if (owner.role !== UserRole.ADMIN && owner.id !== listing.ownerId) {
+      throw new ForbiddenException('not allowed');
+    }
+
+    return await this.prisma.listing.update({
+      where: { id },
+      data: { images: { push: urls } },
+    });
+  }
+
   async remove(owner: AuthUser, id: string) {
     const listing = await this.prisma.listing.findUnique({ where: { id } });
     if (!listing) throw new NotFoundException('listing not found');
@@ -212,9 +231,98 @@ export class ListingsService {
     if (admin.role !== UserRole.ADMIN) {
       throw new ForbiddenException('admin only');
     }
-    return await this.prisma.listing.update({
+
+    const before = await this.prisma.listing.findUnique({
+      where: { id },
+      select: { id: true, status: true },
+    });
+    if (!before) throw new NotFoundException('listing not found');
+
+    const updated = await this.prisma.listing.update({
       where: { id },
       data: { status },
     });
+
+    await recordAuditLog(this.prisma, {
+      actorId: admin.id,
+      action: 'LISTING_STATUS_CHANGE',
+      targetType: 'Listing',
+      targetId: id,
+      metadata: { from: before.status, to: status },
+    });
+
+    return updated;
+  }
+
+  async setFeatured(admin: AuthUser, id: string, featured: boolean) {
+    if (admin.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('admin only');
+    }
+
+    const before = await this.prisma.listing.findUnique({
+      where: { id },
+      select: { id: true, featured: true, featuredUntil: true },
+    });
+    if (!before) throw new NotFoundException('listing not found');
+
+    const updated = await this.prisma.listing.update({
+      where: { id },
+      // Clearing featuredUntil whenever admin unfeatures a listing stops a
+      // stale expiry from silently reactivating it if admin re-features it
+      // later without an explicit new purchase.
+      data: { featured, featuredUntil: featured ? before.featuredUntil : null },
+    });
+
+    await recordAuditLog(this.prisma, {
+      actorId: admin.id,
+      action: 'LISTING_FEATURED_CHANGE',
+      targetType: 'Listing',
+      targetId: id,
+      metadata: {
+        from: before.featured,
+        to: featured,
+        featuredUntil: updated.featuredUntil,
+      },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Called only by PaymentsService once a real Paystack/Flutterwave payment
+   * for FEATURED_LISTING has been independently verified — ownership/status
+   * authorization already happened in PaymentsService.initiate(), so this is
+   * just the renewal-safe activation effect, no auth checks here.
+   */
+  async activateFeaturedListing(listingId: string, paymentReference: string) {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+      select: { id: true, featuredUntil: true },
+    });
+    if (!listing) throw new NotFoundException('listing not found');
+
+    const now = new Date();
+    const base = listing.featuredUntil && listing.featuredUntil > now ? listing.featuredUntil : now;
+    const featuredUntil = new Date(base);
+    featuredUntil.setDate(featuredUntil.getDate() + FEATURED_LISTING_DURATION_DAYS);
+
+    const updated = await this.prisma.listing.update({
+      where: { id: listingId },
+      data: { featured: true, featuredUntil },
+    });
+
+    await recordAuditLog(this.prisma, {
+      actorId: updated.ownerId,
+      action: 'LISTING_FEATURED_PURCHASED',
+      targetType: 'Listing',
+      targetId: listingId,
+      metadata: {
+        days: FEATURED_LISTING_DURATION_DAYS,
+        expiresAt: featuredUntil,
+        paymentReference,
+      },
+    });
+
+    return updated;
   }
 }

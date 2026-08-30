@@ -1,4 +1,13 @@
-import { BadRequestException, Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 
 import { AuthUserParam } from '../../common/decorators/auth-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -57,6 +66,36 @@ export class UsersController {
         emailVerified: true,
         name: true,
         phone: true,
+      },
+    });
+  }
+
+  @Post('me/owner-application')
+  @UseGuards(JwtAuthGuard)
+  async applyForOwnerRole(@AuthUserParam() user: AuthUser) {
+    const dbUser = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { id: true, role: true, ownerApplicationStatus: true },
+    });
+    if (!dbUser) {
+      throw new NotFoundException('user not found');
+    }
+    if (dbUser.role !== 'RENTER') {
+      throw new BadRequestException('only renters can apply to become a landlord');
+    }
+    if (dbUser.ownerApplicationStatus === 'PENDING') {
+      throw new BadRequestException('an owner application is already pending');
+    }
+
+    return await this.prisma.user.update({
+      where: { id: user.id },
+      data: { ownerApplicationStatus: 'PENDING', ownerApplicationAt: new Date() },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        ownerApplicationStatus: true,
+        ownerApplicationAt: true,
       },
     });
   }

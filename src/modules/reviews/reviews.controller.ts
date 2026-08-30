@@ -1,4 +1,13 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 
 import { AuthUserParam } from '../../common/decorators/auth-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -48,5 +57,23 @@ export class ReviewsController {
       rating: ratingNumber,
       body: text,
     });
+  }
+
+  @Patch(':reviewId/response')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.LANDLORD)
+  async respond(
+    @AuthUserParam() user: AuthUser,
+    @Param('listingId') listingId: string,
+    @Param('reviewId') reviewId: string,
+    @Body() body: unknown,
+  ) {
+    const data = asRecord(body);
+    const response = data.response;
+    if (typeof response !== 'string' || !response.trim()) {
+      throw new BadRequestException('response is required');
+    }
+
+    return await this.reviews.respondAsOwner(user, listingId, reviewId, response.trim());
   }
 }

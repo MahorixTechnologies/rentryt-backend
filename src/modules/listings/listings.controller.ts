@@ -199,4 +199,19 @@ export class ListingsController {
     }
     return await this.listings.setStatus(user, id, status);
   }
+
+  @Patch(':id/featured')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async setFeatured(
+    @AuthUserParam() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const data = asRecord(body);
+    if (typeof data.featured !== 'boolean') {
+      throw new BadRequestException('featured must be a boolean');
+    }
+    return await this.listings.setFeatured(user, id, data.featured);
+  }
 }

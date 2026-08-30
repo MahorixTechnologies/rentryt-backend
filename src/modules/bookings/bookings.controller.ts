@@ -83,9 +83,36 @@ export class BookingsController {
     return await this.bookings.decideBooking(user, id, decision);
   }
 
+  /** Manual admin reconciliation override — see BookingsService.markPaid. */
   @Patch(':id/pay')
-  @Roles(UserRole.RENTER)
+  @Roles(UserRole.ADMIN)
   async pay(@AuthUserParam() user: AuthUser, @Param('id') id: string) {
     return await this.bookings.markPaid(user, id);
+  }
+
+  /** LANDLORD owning the listing, or ADMIN — see BookingsService.checkIn. */
+  @Post(':id/check-in')
+  @Roles(UserRole.LANDLORD, UserRole.ADMIN)
+  async checkIn(@AuthUserParam() user: AuthUser, @Param('id') id: string) {
+    return await this.bookings.checkIn(user, id);
+  }
+
+  /** LANDLORD owning the listing, or ADMIN — see BookingsService.checkOut. */
+  @Post(':id/check-out')
+  @Roles(UserRole.LANDLORD, UserRole.ADMIN)
+  async checkOut(@AuthUserParam() user: AuthUser, @Param('id') id: string) {
+    return await this.bookings.checkOut(user, id);
+  }
+
+  /**
+   * The renter who owns the booking, the LANDLORD who owns the listing, or
+   * ADMIN — see BookingsService.cancel. Multi-role ownership is enforced
+   * inside the service since RolesGuard only checks role membership, not
+   * per-resource ownership.
+   */
+  @Post(':id/cancel')
+  @Roles(UserRole.RENTER, UserRole.LANDLORD, UserRole.ADMIN)
+  async cancel(@AuthUserParam() user: AuthUser, @Param('id') id: string) {
+    return await this.bookings.cancel(user, id);
   }
 }
