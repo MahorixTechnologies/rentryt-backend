@@ -89,6 +89,7 @@ export class AuthService {
     password: string;
     role?: UserRole;
     phone?: string;
+    name?: string;
   }) {
     const email = normalizeEmail(params.email);
     const password = requirePassword(params.password);
@@ -116,6 +117,7 @@ export class AuthService {
         passwordHash,
         role,
         phone: params.phone?.trim() || null,
+        name: params.name?.trim() || null,
       },
       select: { id: true, email: true, role: true, emailVerified: true, name: true, phone: true },
     });

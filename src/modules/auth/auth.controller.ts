@@ -10,12 +10,19 @@ export class AuthController {
   @Post('register')
   async register(
     @Body()
-    body: { email?: unknown; password?: unknown; role?: unknown; phone?: unknown },
+    body: {
+      email?: unknown;
+      password?: unknown;
+      role?: unknown;
+      phone?: unknown;
+      name?: unknown;
+    },
   ) {
     const email = body.email;
     const password = body.password;
     const role = body.role;
     const phone = body.phone;
+    const name = body.name;
 
     if (typeof email !== 'string' || email.trim().length === 0) {
       throw new BadRequestException('email is required');
@@ -32,6 +39,7 @@ export class AuthController {
       password,
       role: resolvedRole,
       phone: typeof phone === 'string' ? phone : undefined,
+      name: typeof name === 'string' ? name : undefined,
     });
   }
 
