@@ -117,13 +117,15 @@ which checks the request's `Authorization` header equals
 `CRON_SECRET` isn't set at all. There is no `JwtAuthGuard`/`RolesGuard` on
 these routes; Vercel Cron carries no user session.
 
-`vercel.json`'s `"crons"` array already points at both paths with schedules
-matching the existing intervals as closely as Vercel's cron syntax allows:
+`vercel.json`'s `"crons"` array points at both paths, once per day each,
+staggered 15 minutes apart — this is deliberately **Hobby-plan-compatible**
+(see the limitation below for why neither job runs at the Docker/Cloud Run
+cadence on Vercel):
 
 ```json
 "crons": [
-  { "path": "/api/v1/internal/cron/booking-expiry", "schedule": "0 * * * *" },
-  { "path": "/api/v1/internal/cron/refund-processor", "schedule": "*/5 * * * *" }
+  { "path": "/api/v1/internal/cron/booking-expiry", "schedule": "0 3 * * *" },
+  { "path": "/api/v1/internal/cron/refund-processor", "schedule": "15 3 * * *" }
 ]
 ```
 
@@ -136,18 +138,20 @@ refuse to boot without it once deployed to production.
 
 ### Known limitation — Hobby plan cron frequency
 
-**Vercel's Hobby plan only supports cron jobs that run once per day.** The
-`refund-processor` schedule here (`*/5 * * * *`, every 5 minutes) requires at
-least a **Pro** plan to actually run that often. I was not able to verify
-directly in this environment (no live Vercel project/CLI access) whether
-Hobby **rejects** a sub-daily schedule at deploy time or **silently coarsens**
-it to once a day — Vercel's own docs describe Hobby as limited to daily crons
-but I could not confirm which failure mode applies here. Either way: **on a
-Hobby-plan project, do not assume refunds process every 5 minutes in
-production** — verify the actual applied schedule in the Vercel dashboard
-right after deploying, and upgrade to Pro if the 5-minute cadence matters.
-The `booking-expiry` schedule (`0 * * * *`, hourly) has the same problem on
-Hobby, since hourly is also more frequent than once/day.
+**Vercel's Hobby plan only supports cron jobs that run once per day**, so
+both schedules above are deliberately daily rather than matching the
+Docker/Cloud Run cadence (`booking-expiry` hourly, `refund-processor` every 5
+minutes). Practical effect on Vercel specifically: an expired pending booking
+can sit unexpired for up to ~24h, and an eligible refund can sit unprocessed
+for up to ~24h, before the next daily run picks it up. Neither job is
+data-lossy — they only ever act on rows that are *already* past their
+deadline — so this is a latency tradeoff, not a correctness one.
+
+If that latency isn't acceptable, the options are: upgrade the Vercel
+project to **Pro** (unlocks sub-daily cron schedules — restore `0 * * * *`
+and `*/5 * * * *` at that point) or run the Docker/Cloud Run deploy instead,
+where both jobs keep running on their original `setInterval` cadence
+regardless of plan.
 
 ## 6. What the code already handles
 
