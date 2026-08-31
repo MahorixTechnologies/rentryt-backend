@@ -52,11 +52,17 @@ Set these in the Vercel project's environment variables (Production at minimum):
 
 ## 3. Optional: email
 
-`SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` stay
-optional — exactly as they do locally. If left unset, `EmailService` falls
-back to console-logging the would-be email instead of sending it, so the app
-boots and every flow that triggers an email keeps working with no mail
-credentials configured at all.
+Two mutually exclusive backends, both optional — exactly as they are locally.
+`NodemailerEmailProvider` checks `EMAIL_USER`/`EMAIL_PASS` (Gmail) first, then
+falls back to `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`SMTP_FROM`
+(generic SMTP). If neither is set, `EmailService` falls back to
+console-logging the would-be email instead of sending it, so the app boots
+and every flow that triggers an email keeps working with no mail credentials
+configured at all.
+
+For Gmail specifically: `EMAIL_PASS` must be a 16-character **App Password**
+(Google Account → Security → App Passwords) — Gmail rejects the account's
+normal login password for SMTP auth.
 
 ## 4. File storage (Vercel Blob)
 

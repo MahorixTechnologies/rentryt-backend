@@ -76,4 +76,10 @@ export const envValidationSchema = Joi.object({
   SMTP_USER: Joi.string().optional(),
   SMTP_PASS: Joi.string().optional(),
   SMTP_FROM: Joi.string().optional(),
+  // Gmail-service shortcut for NodemailerEmailProvider — checked before
+  // SMTP_HOST. EMAIL_PASS must be a Gmail App Password, not the account
+  // login password. Optional in every environment: EmailService falls back
+  // to console-logging when neither this nor SMTP_HOST is set.
+  EMAIL_USER: Joi.string().optional(),
+  EMAIL_PASS: Joi.string().optional(),
 }).unknown(true);
