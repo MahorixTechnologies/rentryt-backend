@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -44,7 +49,10 @@ export class RefundsProcessorJob implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    this.timer = setInterval(() => void this.handleRefundPendingBookings(), FIVE_MINUTES_MS);
+    this.timer = setInterval(
+      () => void this.handleRefundPendingBookings(),
+      FIVE_MINUTES_MS,
+    );
   }
 
   onModuleDestroy() {

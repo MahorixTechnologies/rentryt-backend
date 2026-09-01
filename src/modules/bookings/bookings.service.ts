@@ -1,6 +1,12 @@
 import { randomUUID } from 'crypto';
 
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Currency } from '@prisma/client';
 
 import type { AuthUser } from '../../common/types/auth';
@@ -13,7 +19,10 @@ import {
   SERVICE_FEE_PERCENT_KEY,
 } from '../../common/fee-rules/fee-rules.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { NotificationsService, NotificationType } from '../notifications/notifications.service';
+import {
+  NotificationsService,
+  NotificationType,
+} from '../notifications/notifications.service';
 
 function parseDate(value: string): Date {
   const trimmed = value.trim();
@@ -79,7 +88,8 @@ export class BookingsService {
     const start = parseDate(params.startDate);
     const end = parseDate(params.endDate);
     const nights = diffNights(start, end);
-    if (nights <= 0) throw new BadRequestException('endDate must be after startDate');
+    if (nights <= 0)
+      throw new BadRequestException('endDate must be after startDate');
 
     const overlapping = await this.prisma.booking.findFirst({
       where: {
@@ -118,7 +128,15 @@ export class BookingsService {
         paymentStatus: 'UNPAID',
       },
       include: {
-        listing: { select: { id: true, title: true, location: true, currency: true, pricePerNight: true } },
+        listing: {
+          select: {
+            id: true,
+            title: true,
+            location: true,
+            currency: true,
+            pricePerNight: true,
+          },
+        },
       },
     });
   }
@@ -131,7 +149,15 @@ export class BookingsService {
       where: { renterId: user.id },
       orderBy: { createdAt: 'desc' },
       include: {
-        listing: { select: { id: true, title: true, location: true, currency: true, pricePerNight: true } },
+        listing: {
+          select: {
+            id: true,
+            title: true,
+            location: true,
+            currency: true,
+            pricePerNight: true,
+          },
+        },
       },
     });
   }
@@ -150,7 +176,11 @@ export class BookingsService {
     });
   }
 
-  async decideBooking(owner: AuthUser, bookingId: string, decision: 'ACCEPT' | 'REJECT') {
+  async decideBooking(
+    owner: AuthUser,
+    bookingId: string,
+    decision: 'ACCEPT' | 'REJECT',
+  ) {
     if (owner.role !== UserRole.LANDLORD) {
       throw new ForbiddenException('landlords only');
     }
@@ -181,12 +211,17 @@ export class BookingsService {
       throw new ForbiddenException('admin only');
     }
 
-    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
     if (!booking) throw new NotFoundException('booking not found');
 
     return await this.prisma.booking.update({
       where: { id: bookingId },
-      data: { paymentStatus: 'PAID', status: booking.status === 'PENDING' ? 'CONFIRMED' : booking.status },
+      data: {
+        paymentStatus: 'PAID',
+        status: booking.status === 'PENDING' ? 'CONFIRMED' : booking.status,
+      },
     });
   }
 
@@ -196,12 +231,17 @@ export class BookingsService {
    * authorized the payer during initiate(), so no auth checks here.
    */
   async markPaidAfterVerifiedPayment(bookingId: string) {
-    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
     if (!booking) throw new NotFoundException('booking not found');
 
     return await this.prisma.booking.update({
       where: { id: bookingId },
-      data: { paymentStatus: 'PAID', status: booking.status === 'PENDING' ? 'CONFIRMED' : booking.status },
+      data: {
+        paymentStatus: 'PAID',
+        status: booking.status === 'PENDING' ? 'CONFIRMED' : booking.status,
+      },
     });
   }
 
@@ -218,13 +258,17 @@ export class BookingsService {
     this.assertLandlordOwnerOrAdmin(actor, booking.listing.ownerId);
 
     if (booking.status !== 'CONFIRMED') {
-      throw new BadRequestException('booking must be CONFIRMED before check-in');
+      throw new BadRequestException(
+        'booking must be CONFIRMED before check-in',
+      );
     }
     if (booking.paymentStatus !== 'PAID') {
       throw new BadRequestException('booking must be paid before check-in');
     }
     if (new Date() < booking.startDate) {
-      throw new BadRequestException('cannot check in before the booking start date');
+      throw new BadRequestException(
+        'cannot check in before the booking start date',
+      );
     }
 
     const updated = await this.prisma.booking.update({
@@ -261,13 +305,17 @@ export class BookingsService {
   async checkOut(actor: AuthUser, bookingId: string) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { listing: { select: { ownerId: true, title: true, currency: true } } },
+      include: {
+        listing: { select: { ownerId: true, title: true, currency: true } },
+      },
     });
     if (!booking) throw new NotFoundException('booking not found');
     this.assertLandlordOwnerOrAdmin(actor, booking.listing.ownerId);
 
     if (booking.status !== 'CHECKED_IN') {
-      throw new BadRequestException('booking must be CHECKED_IN before check-out');
+      throw new BadRequestException(
+        'booking must be CHECKED_IN before check-out',
+      );
     }
 
     const updated = await this.prisma.booking.update({
@@ -326,7 +374,9 @@ export class BookingsService {
     ownerId: string,
     fees: { subtotal: number; serviceFee: number; currency: Currency },
   ) {
-    const account = await this.prisma.payoutAccount.findUnique({ where: { ownerId } });
+    const account = await this.prisma.payoutAccount.findUnique({
+      where: { ownerId },
+    });
 
     await this.prisma.payout.create({
       data: {
@@ -359,14 +409,17 @@ export class BookingsService {
     if (!booking) throw new NotFoundException('booking not found');
 
     const isRenter = actor.id === booking.renterId;
-    const isOwningLandlord = actor.role === UserRole.LANDLORD && actor.id === booking.listing.ownerId;
+    const isOwningLandlord =
+      actor.role === UserRole.LANDLORD && actor.id === booking.listing.ownerId;
     const isAdmin = actor.role === UserRole.ADMIN;
     if (!isRenter && !isOwningLandlord && !isAdmin) {
       throw new ForbiddenException('not allowed');
     }
 
     if (booking.status !== 'PENDING' && booking.status !== 'CONFIRMED') {
-      throw new BadRequestException('booking can only be cancelled while PENDING or CONFIRMED');
+      throw new BadRequestException(
+        'booking can only be cancelled while PENDING or CONFIRMED',
+      );
     }
 
     const refundOwed = booking.paymentStatus === 'PAID';
@@ -461,7 +514,8 @@ export class BookingsService {
           to: 'CANCELLED',
           refundOwed,
           automated: true,
-          reason: 'startDate passed while booking was still PENDING (booking expiry job)',
+          reason:
+            'startDate passed while booking was still PENDING (booking expiry job)',
         },
       });
 
@@ -471,19 +525,31 @@ export class BookingsService {
           type: NotificationType.BOOKING_STATUS_CHANGE,
           title: 'Booking cancelled (expired)',
           body,
-          data: { bookingId: booking.id, status: 'CANCELLED', refundOwed, automated: true },
+          data: {
+            bookingId: booking.id,
+            status: 'CANCELLED',
+            refundOwed,
+            automated: true,
+          },
         }),
         this.notifications.notify(booking.listing.ownerId, {
           type: NotificationType.BOOKING_STATUS_CHANGE,
           title: 'Booking cancelled (expired)',
           body,
-          data: { bookingId: booking.id, status: 'CANCELLED', refundOwed, automated: true },
+          data: {
+            bookingId: booking.id,
+            status: 'CANCELLED',
+            refundOwed,
+            automated: true,
+          },
         }),
       ]);
     }
 
     if (expiredCount > 0) {
-      this.logger.log(`Auto-cancelled ${expiredCount} stale PENDING booking(s) past their start date`);
+      this.logger.log(
+        `Auto-cancelled ${expiredCount} stale PENDING booking(s) past their start date`,
+      );
     }
 
     return expiredCount;

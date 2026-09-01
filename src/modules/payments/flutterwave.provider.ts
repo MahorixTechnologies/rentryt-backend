@@ -134,7 +134,10 @@ export class FlutterwaveProvider implements PaymentProviderAdapter {
   ): Promise<TransferRecipientResult> {
     return {
       success: false,
-      raw: { message: 'Flutterwave has no transfer-recipient step; pass account details directly to transfer()' },
+      raw: {
+        message:
+          'Flutterwave has no transfer-recipient step; pass account details directly to transfer()',
+      },
     };
   }
 
@@ -147,7 +150,10 @@ export class FlutterwaveProvider implements PaymentProviderAdapter {
     if (!params.accountNumber || !params.bankCode) {
       return {
         success: false,
-        raw: { message: 'accountNumber and bankCode are required for a Flutterwave transfer' },
+        raw: {
+          message:
+            'accountNumber and bankCode are required for a Flutterwave transfer',
+        },
       };
     }
 
@@ -174,7 +180,8 @@ export class FlutterwaveProvider implements PaymentProviderAdapter {
 
     return {
       success: true,
-      providerTransferId: body.data?.id != null ? String(body.data.id) : undefined,
+      providerTransferId:
+        body.data?.id != null ? String(body.data.id) : undefined,
       raw: body,
     };
   }

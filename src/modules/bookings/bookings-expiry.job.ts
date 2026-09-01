@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 
 import { BookingsService } from './bookings.service';
 
@@ -28,7 +33,10 @@ export class BookingsExpiryJob implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly bookings: BookingsService) {}
 
   onModuleInit() {
-    this.timer = setInterval(() => void this.handleExpiredPendingBookings(), ONE_HOUR_MS);
+    this.timer = setInterval(
+      () => void this.handleExpiredPendingBookings(),
+      ONE_HOUR_MS,
+    );
   }
 
   onModuleDestroy() {
@@ -39,7 +47,10 @@ export class BookingsExpiryJob implements OnModuleInit, OnModuleDestroy {
     try {
       await this.bookings.expireStalePendingBookings();
     } catch (error) {
-      this.logger.error('Booking expiry sweep failed', error instanceof Error ? error.stack : error);
+      this.logger.error(
+        'Booking expiry sweep failed',
+        error instanceof Error ? error.stack : error,
+      );
     }
   }
 }

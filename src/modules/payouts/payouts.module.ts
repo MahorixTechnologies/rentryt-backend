@@ -16,7 +16,12 @@ import { PayoutsService } from './payouts.service';
   // doesn't need to import PaymentsModule, which itself imports
   // BookingsModule — avoids a longer import chain for a dependency this
   // module only needs for the two provider adapters.
-  providers: [PayoutsService, PaymentProviderRegistry, PaystackProvider, FlutterwaveProvider],
+  providers: [
+    PayoutsService,
+    PaymentProviderRegistry,
+    PaystackProvider,
+    FlutterwaveProvider,
+  ],
   // Exported so AdminModule can reuse PayoutsService.process for the admin
   // POST /admin/payouts/:id/process endpoint instead of duplicating it.
   exports: [PayoutsService],

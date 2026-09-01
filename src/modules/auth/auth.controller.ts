@@ -84,7 +84,9 @@ export class AuthController {
   }
 
   @Post('reset-password')
-  async resetPassword(@Body() body: { token?: unknown; newPassword?: unknown }) {
+  async resetPassword(
+    @Body() body: { token?: unknown; newPassword?: unknown },
+  ) {
     const token = body.token;
     const newPassword = body.newPassword;
     if (typeof token !== 'string' || token.trim().length === 0) {

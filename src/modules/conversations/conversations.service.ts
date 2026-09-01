@@ -44,13 +44,18 @@ export class ConversationsService {
   ) {}
 
   private assertParticipant(actor: AuthUser, conversation: ConversationRecord) {
-    if (actor.id !== conversation.renterId && actor.id !== conversation.ownerId) {
+    if (
+      actor.id !== conversation.renterId &&
+      actor.id !== conversation.ownerId
+    ) {
       throw new ForbiddenException('not a participant in this conversation');
     }
   }
 
   private async findConversationOrThrow(id: string) {
-    const conversation = await this.prisma.conversation.findUnique({ where: { id } });
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id },
+    });
     if (!conversation) throw new NotFoundException('conversation not found');
     return conversation;
   }
@@ -64,7 +69,9 @@ export class ConversationsService {
       throw new BadRequestException('listingId or bookingId is required');
     }
     if (listingId && bookingId) {
-      throw new BadRequestException('provide only one of listingId or bookingId');
+      throw new BadRequestException(
+        'provide only one of listingId or bookingId',
+      );
     }
 
     if (bookingId) {
@@ -87,7 +94,9 @@ export class ConversationsService {
     });
     if (!listing) throw new NotFoundException('listing not found');
     if (listing.ownerId === actor.id) {
-      throw new ForbiddenException('cannot message yourself about your own listing');
+      throw new ForbiddenException(
+        'cannot message yourself about your own listing',
+      );
     }
 
     const existing = await this.prisma.conversation.findUnique({
@@ -131,12 +140,18 @@ export class ConversationsService {
 
     try {
       return await this.prisma.conversation.create({
-        data: { bookingId, renterId: booking.renterId, ownerId: booking.listing.ownerId },
+        data: {
+          bookingId,
+          renterId: booking.renterId,
+          ownerId: booking.listing.ownerId,
+        },
       });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         const raced = await this.prisma.conversation.findUnique({
-          where: { renterId_bookingId: { renterId: booking.renterId, bookingId } },
+          where: {
+            renterId_bookingId: { renterId: booking.renterId, bookingId },
+          },
         });
         if (raced) return raced;
       }
@@ -197,7 +212,9 @@ export class ConversationsService {
     const message = updated.messages[0];
 
     const recipientId =
-      actor.id === conversation.renterId ? conversation.ownerId : conversation.renterId;
+      actor.id === conversation.renterId
+        ? conversation.ownerId
+        : conversation.renterId;
     const preview =
       trimmed.length > MESSAGE_PREVIEW_MAX
         ? `${trimmed.slice(0, MESSAGE_PREVIEW_MAX)}…`

@@ -81,7 +81,9 @@ export class UsersController {
       throw new NotFoundException('user not found');
     }
     if (dbUser.role !== 'RENTER') {
-      throw new BadRequestException('only renters can apply to become a landlord');
+      throw new BadRequestException(
+        'only renters can apply to become a landlord',
+      );
     }
     if (dbUser.ownerApplicationStatus === 'PENDING') {
       throw new BadRequestException('an owner application is already pending');
@@ -89,7 +91,10 @@ export class UsersController {
 
     return await this.prisma.user.update({
       where: { id: user.id },
-      data: { ownerApplicationStatus: 'PENDING', ownerApplicationAt: new Date() },
+      data: {
+        ownerApplicationStatus: 'PENDING',
+        ownerApplicationAt: new Date(),
+      },
       select: {
         id: true,
         email: true,

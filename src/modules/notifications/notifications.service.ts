@@ -58,9 +58,7 @@ export class NotificationsService {
         type: params.type,
         title: params.title,
         body: params.body,
-        data: (params.data ?? undefined) as
-          | Prisma.InputJsonValue
-          | undefined,
+        data: (params.data ?? undefined) as Prisma.InputJsonValue | undefined,
       },
     });
 

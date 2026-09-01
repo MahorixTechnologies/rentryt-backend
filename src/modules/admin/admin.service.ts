@@ -153,14 +153,18 @@ export class AdminService {
       throw new NotFoundException('user not found');
     }
 
+    const { listings, bookings, _count, ...rest } = target;
+
     return {
-      ...target,
+      ...rest,
       counts: {
-        listingsOwned: target._count.listings,
-        bookingsAsRenter: target._count.bookings,
-        reviewsWritten: target._count.reviews,
-        accessTokens: target._count.tokens,
+        listingsOwned: _count.listings,
+        bookingsAsRenter: _count.bookings,
+        reviewsWritten: _count.reviews,
+        accessTokens: _count.tokens,
       },
+      recentListings: listings,
+      recentBookings: bookings,
     };
   }
 
@@ -168,7 +172,9 @@ export class AdminService {
     this.ensureAdmin(user);
     return await this.prisma.listing.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { owner: { select: { id: true, email: true, name: true, phone: true } } },
+      include: {
+        owner: { select: { id: true, email: true, name: true, phone: true } },
+      },
     });
   }
 
@@ -177,13 +183,19 @@ export class AdminService {
     return await this.prisma.booking.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
-        listing: { select: { id: true, title: true, location: true, ownerId: true } },
+        listing: {
+          select: { id: true, title: true, location: true, ownerId: true },
+        },
         renter: { select: { id: true, email: true, name: true, phone: true } },
       },
     });
   }
 
-  async setUserStatus(user: AuthUser, userId: string, status: 'ACTIVE' | 'SUSPENDED') {
+  async setUserStatus(
+    user: AuthUser,
+    userId: string,
+    status: 'ACTIVE' | 'SUSPENDED',
+  ) {
     this.ensureAdmin(user);
 
     const before = await this.prisma.user.findUnique({
@@ -214,11 +226,10 @@ export class AdminService {
   async ownerApplications(user: AuthUser, status?: string) {
     this.ensureAdmin(user);
 
-    const filterStatus: OwnerApplicationStatus = OWNER_APPLICATION_STATUSES.includes(
-      status as OwnerApplicationStatus,
-    )
-      ? (status as OwnerApplicationStatus)
-      : 'PENDING';
+    const filterStatus: OwnerApplicationStatus =
+      OWNER_APPLICATION_STATUSES.includes(status as OwnerApplicationStatus)
+        ? (status as OwnerApplicationStatus)
+        : 'PENDING';
 
     return await this.prisma.user.findMany({
       where: { ownerApplicationStatus: filterStatus },
@@ -236,7 +247,11 @@ export class AdminService {
     });
   }
 
-  async decideOwnerApplication(admin: AuthUser, userId: string, decision: 'APPROVE' | 'REJECT') {
+  async decideOwnerApplication(
+    admin: AuthUser,
+    userId: string,
+    decision: 'APPROVE' | 'REJECT',
+  ) {
     this.ensureAdmin(admin);
 
     const target = await this.prisma.user.findUnique({
@@ -247,7 +262,9 @@ export class AdminService {
       throw new NotFoundException('user not found');
     }
     if (target.ownerApplicationStatus !== 'PENDING') {
-      throw new BadRequestException('user does not have a pending owner application');
+      throw new BadRequestException(
+        'user does not have a pending owner application',
+      );
     }
 
     const updated = await this.prisma.user.update({
@@ -280,7 +297,11 @@ export class AdminService {
     return updated;
   }
 
-  async moderateReview(admin: AuthUser, reviewId: string, status: 'APPROVED' | 'REJECTED') {
+  async moderateReview(
+    admin: AuthUser,
+    reviewId: string,
+    status: 'APPROVED' | 'REJECTED',
+  ) {
     this.ensureAdmin(admin);
 
     const before = await this.prisma.review.findUnique({
@@ -311,7 +332,10 @@ export class AdminService {
     this.ensureAdmin(user);
 
     const parsed = limitParam != null ? Number(limitParam) : NaN;
-    const limit = Number.isFinite(parsed) && parsed > 0 ? Math.min(Math.trunc(parsed), 200) : 50;
+    const limit =
+      Number.isFinite(parsed) && parsed > 0
+        ? Math.min(Math.trunc(parsed), 200)
+        : 50;
 
     return await this.prisma.auditLog.findMany({
       orderBy: { createdAt: 'desc' },
@@ -330,7 +354,12 @@ export class AdminService {
   async updateFeeRule(admin: AuthUser, key: string, value: number) {
     this.ensureAdmin(admin);
 
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
+    if (
+      typeof value !== 'number' ||
+      !Number.isFinite(value) ||
+      value < 0 ||
+      value > 100
+    ) {
       throw new BadRequestException('value must be a number between 0 and 100');
     }
 
@@ -404,7 +433,10 @@ export class AdminService {
       }),
     ]);
 
-    const buckets = new Map<string, { weekStart: string; count: number; revenue: number }>();
+    const buckets = new Map<
+      string,
+      { weekStart: string; count: number; revenue: number }
+    >();
     for (let i = 0; i < TRENDS_WEEKS; i++) {
       const weekStart = new Date(earliestWeekStart.getTime() + i * MS_PER_WEEK);
       const key = toIsoDate(weekStart);

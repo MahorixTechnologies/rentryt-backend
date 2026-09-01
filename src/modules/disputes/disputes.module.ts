@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 
-import { AdminDisputesController, DisputesController } from './disputes.controller';
+import {
+  AdminDisputesController,
+  DisputesController,
+} from './disputes.controller';
 import { DisputesService } from './disputes.service';
 
 @Module({

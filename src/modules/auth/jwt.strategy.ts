@@ -4,7 +4,10 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
 import { UserRole } from '../../common/types/auth';
-import type { AuthUser, UserRole as UserRoleType } from '../../common/types/auth';
+import type {
+  AuthUser,
+  UserRole as UserRoleType,
+} from '../../common/types/auth';
 import { PrismaService } from '../../prisma/prisma.service';
 
 type JwtPayload = {
@@ -39,7 +42,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return {
       id: user.id,
       email: user.email,
-      role: (user.role as UserRoleType) ?? UserRole.RENTER,
+      role: user.role ?? UserRole.RENTER,
     };
   }
 }

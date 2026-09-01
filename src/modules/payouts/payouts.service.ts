@@ -1,14 +1,27 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { PaymentProvider, PayoutStatus, Prisma } from '@prisma/client';
 
 import { recordAuditLog } from '../../common/audit/audit-log';
 import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
 import { PrismaService } from '../../prisma/prisma.service';
-import { NotificationsService, NotificationType } from '../notifications/notifications.service';
+import {
+  NotificationsService,
+  NotificationType,
+} from '../notifications/notifications.service';
 import { PaymentProviderRegistry } from '../payments/payment-provider.registry';
 
-const PAYOUT_STATUSES: readonly PayoutStatus[] = ['PENDING', 'PROCESSING', 'PAID', 'FAILED'];
+const PAYOUT_STATUSES: readonly PayoutStatus[] = [
+  'PENDING',
+  'PROCESSING',
+  'PAID',
+  'FAILED',
+];
 
 type SetupParams = {
   provider: PaymentProvider;
@@ -82,12 +95,14 @@ export class PayoutsService {
     // payment-provider.interface.ts), so on failure we still persist the
     // submitted bank details (verified: false, no recipientId) and surface
     // the provider's own error message to the caller.
-    const result = await this.providers.get('PAYSTACK').createTransferRecipient({
-      accountNumber: params.accountNumber,
-      bankCode: params.bankCode,
-      accountName: params.accountName,
-      currency: 'NGN',
-    });
+    const result = await this.providers
+      .get('PAYSTACK')
+      .createTransferRecipient({
+        accountNumber: params.accountNumber,
+        bankCode: params.bankCode,
+        accountName: params.accountName,
+        currency: 'NGN',
+      });
 
     if (!result.success) {
       await this.prisma.payoutAccount.upsert({
@@ -147,6 +162,16 @@ export class PayoutsService {
     return account;
   }
 
+  /** The signed-in landlord's own payout account, or null if never set up. */
+  async getAccount(owner: AuthUser) {
+    if (owner.role !== UserRole.LANDLORD) {
+      throw new ForbiddenException('landlords only');
+    }
+    return await this.prisma.payoutAccount.findUnique({
+      where: { ownerId: owner.id },
+    });
+  }
+
   /** LANDLORD sees only their own payouts; ADMIN sees all, optionally filtered by ?status=. */
   async list(user: AuthUser, statusFilter?: string) {
     if (user.role === UserRole.ADMIN) {
@@ -195,7 +220,9 @@ export class PayoutsService {
    * re-transferring.
    */
   async process(admin: AuthUser, payoutId: string) {
-    const payout = await this.prisma.payout.findUnique({ where: { id: payoutId } });
+    const payout = await this.prisma.payout.findUnique({
+      where: { id: payoutId },
+    });
     if (!payout) throw new NotFoundException('payout not found');
 
     if (payout.status === 'PAID') {

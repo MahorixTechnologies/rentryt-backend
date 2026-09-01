@@ -8,7 +8,10 @@ import {
 import { recordAuditLog } from '../../common/audit/audit-log';
 import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
-import { isFeaturedActive, isListingPublic } from '../../common/listings/listing-visibility';
+import {
+  isFeaturedActive,
+  isListingPublic,
+} from '../../common/listings/listing-visibility';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const FEATURED_LISTING_DURATION_DAYS = 30;
@@ -84,11 +87,17 @@ export class ListingsService {
               ],
             }
           : {}),
-        ...(location ? { location: { contains: location, mode: 'insensitive' } } : {}),
+        ...(location
+          ? { location: { contains: location, mode: 'insensitive' } }
+          : {}),
         ...(listingType ? { type: listingType } : {}),
         ...(params.rooms ? { rooms: { gte: params.rooms } } : {}),
-        ...(params.minPrice != null ? { pricePerNight: { gte: params.minPrice } } : {}),
-        ...(params.maxPrice != null ? { pricePerNight: { lte: params.maxPrice } } : {}),
+        ...(params.minPrice != null
+          ? { pricePerNight: { gte: params.minPrice } }
+          : {}),
+        ...(params.maxPrice != null
+          ? { pricePerNight: { lte: params.maxPrice } }
+          : {}),
       },
       select: {
         id: true,
@@ -110,7 +119,10 @@ export class ListingsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return listings.map((listing) => ({ ...listing, featured: isFeaturedActive(listing) }));
+    return listings.map((listing) => ({
+      ...listing,
+      featured: isFeaturedActive(listing),
+    }));
   }
 
   async listMine(owner: AuthUser) {
@@ -152,7 +164,11 @@ export class ListingsService {
       throw new ForbiddenException('only landlords can create listings');
     }
 
-    if (!input.title.trim() || !input.location.trim() || input.pricePerNight <= 0) {
+    if (
+      !input.title.trim() ||
+      !input.location.trim() ||
+      input.pricePerNight <= 0
+    ) {
       throw new BadRequestException('invalid listing fields');
     }
 
@@ -175,7 +191,11 @@ export class ListingsService {
     });
   }
 
-  async update(owner: AuthUser, id: string, patch: Partial<CreateListingInput>) {
+  async update(
+    owner: AuthUser,
+    id: string,
+    patch: Partial<CreateListingInput>,
+  ) {
     const listing = await this.prisma.listing.findUnique({ where: { id } });
     if (!listing) throw new NotFoundException('listing not found');
     if (owner.role !== UserRole.ADMIN && owner.id !== listing.ownerId) {
@@ -186,12 +206,20 @@ export class ListingsService {
       where: { id },
       data: {
         ...(patch.title != null ? { title: patch.title.trim() } : {}),
-        ...(patch.description != null ? { description: patch.description.trim() } : {}),
+        ...(patch.description != null
+          ? { description: patch.description.trim() }
+          : {}),
         ...(patch.location != null ? { location: patch.location.trim() } : {}),
-        ...(patch.pricePerNight != null ? { pricePerNight: Math.round(patch.pricePerNight) } : {}),
+        ...(patch.pricePerNight != null
+          ? { pricePerNight: Math.round(patch.pricePerNight) }
+          : {}),
         ...(patch.currency != null ? { currency: patch.currency } : {}),
-        ...(patch.rooms != null ? { rooms: Math.max(0, Math.round(patch.rooms)) } : {}),
-        ...(patch.bathrooms != null ? { bathrooms: Math.max(0, Math.round(patch.bathrooms)) } : {}),
+        ...(patch.rooms != null
+          ? { rooms: Math.max(0, Math.round(patch.rooms)) }
+          : {}),
+        ...(patch.bathrooms != null
+          ? { bathrooms: Math.max(0, Math.round(patch.bathrooms)) }
+          : {}),
         ...(patch.type != null ? { type: patch.type } : {}),
         ...(patch.images != null ? { images: patch.images } : {}),
         ...(patch.amenities != null ? { amenities: patch.amenities } : {}),
@@ -227,7 +255,11 @@ export class ListingsService {
     });
   }
 
-  async setStatus(admin: AuthUser, id: string, status: 'APPROVED' | 'REJECTED') {
+  async setStatus(
+    admin: AuthUser,
+    id: string,
+    status: 'APPROVED' | 'REJECTED',
+  ) {
     if (admin.role !== UserRole.ADMIN) {
       throw new ForbiddenException('admin only');
     }
@@ -302,9 +334,14 @@ export class ListingsService {
     if (!listing) throw new NotFoundException('listing not found');
 
     const now = new Date();
-    const base = listing.featuredUntil && listing.featuredUntil > now ? listing.featuredUntil : now;
+    const base =
+      listing.featuredUntil && listing.featuredUntil > now
+        ? listing.featuredUntil
+        : now;
     const featuredUntil = new Date(base);
-    featuredUntil.setDate(featuredUntil.getDate() + FEATURED_LISTING_DURATION_DAYS);
+    featuredUntil.setDate(
+      featuredUntil.getDate() + FEATURED_LISTING_DURATION_DAYS,
+    );
 
     const updated = await this.prisma.listing.update({
       where: { id: listingId },

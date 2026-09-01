@@ -89,6 +89,8 @@ export interface PaymentProviderAdapter {
    * implementation returns `{success: false}` since PayoutsService never
    * calls this for a Flutterwave account.
    */
-  createTransferRecipient(params: TransferRecipientParams): Promise<TransferRecipientResult>;
+  createTransferRecipient(
+    params: TransferRecipientParams,
+  ): Promise<TransferRecipientResult>;
   transfer(params: TransferParams): Promise<TransferResult>;
 }

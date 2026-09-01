@@ -13,6 +13,12 @@ export function isListingPublic(status: ListingStatus): boolean {
  * window hasn't expired. `featuredUntil: null` means "no expiry" — the
  * admin-only override path leaves it permanently featured.
  */
-export function isFeaturedActive(listing: { featured: boolean; featuredUntil: Date | null }): boolean {
-  return listing.featured && (!listing.featuredUntil || listing.featuredUntil > new Date());
+export function isFeaturedActive(listing: {
+  featured: boolean;
+  featuredUntil: Date | null;
+}): boolean {
+  return (
+    listing.featured &&
+    (!listing.featuredUntil || listing.featuredUntil > new Date())
+  );
 }

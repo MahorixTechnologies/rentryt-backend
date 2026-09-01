@@ -29,7 +29,9 @@ export async function recordAuditLog(
       action: input.action,
       targetType: input.targetType,
       targetId: input.targetId,
-      metadata: (input.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
+      metadata: (input.metadata ?? undefined) as
+        | Prisma.InputJsonValue
+        | undefined,
     },
   });
 }

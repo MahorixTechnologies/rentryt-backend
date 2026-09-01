@@ -1,4 +1,13 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 
 import { AuthUserParam } from '../../common/decorators/auth-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -46,10 +55,20 @@ export class PayoutsController {
     });
   }
 
+  /** The signed-in landlord's own payout account, or null if never set up. */
+  @Get('account')
+  @Roles(UserRole.LANDLORD)
+  async getAccount(@AuthUserParam() user: AuthUser) {
+    return await this.payouts.getAccount(user);
+  }
+
   /** LANDLORD sees only their own payouts; ADMIN sees all (optionally filtered by ?status=). */
   @Get()
   @Roles(UserRole.LANDLORD, UserRole.ADMIN)
-  async list(@AuthUserParam() user: AuthUser, @Query('status') status?: string) {
+  async list(
+    @AuthUserParam() user: AuthUser,
+    @Query('status') status?: string,
+  ) {
     return await this.payouts.list(user, status);
   }
 

@@ -33,7 +33,9 @@ export class PaymentsController {
     const data = asRecord(body);
 
     if (data.purpose !== 'BOOKING' && data.purpose !== 'FEATURED_LISTING') {
-      throw new BadRequestException('purpose must be BOOKING or FEATURED_LISTING');
+      throw new BadRequestException(
+        'purpose must be BOOKING or FEATURED_LISTING',
+      );
     }
     if (data.provider !== 'PAYSTACK' && data.provider !== 'FLUTTERWAVE') {
       throw new BadRequestException('provider must be PAYSTACK or FLUTTERWAVE');
@@ -64,7 +66,9 @@ export class PaymentsController {
     return await this.payments.verify({
       reference: data.reference,
       providerTransactionId:
-        typeof data.providerTransactionId === 'string' ? data.providerTransactionId : undefined,
+        typeof data.providerTransactionId === 'string'
+          ? data.providerTransactionId
+          : undefined,
       callerId: user.id,
     });
   }

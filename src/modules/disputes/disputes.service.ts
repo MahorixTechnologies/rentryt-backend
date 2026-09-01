@@ -45,7 +45,9 @@ export class DisputesService {
     const isRenter = booking.renterId === user.id;
     const isOwningLandlord = booking.listing.ownerId === user.id;
     if (!isRenter && !isOwningLandlord) {
-      throw new ForbiddenException('only the renter or the listing owner can raise a dispute for this booking');
+      throw new ForbiddenException(
+        'only the renter or the listing owner can raise a dispute for this booking',
+      );
     }
 
     const existingOpen = await this.prisma.dispute.findFirst({
@@ -72,7 +74,9 @@ export class DisputesService {
   async listForAdmin(admin: AuthUser, status?: string) {
     this.ensureAdmin(admin);
 
-    const filterStatus: DisputeStatus = DISPUTE_STATUSES.includes(status as DisputeStatus)
+    const filterStatus: DisputeStatus = DISPUTE_STATUSES.includes(
+      status as DisputeStatus,
+    )
       ? (status as DisputeStatus)
       : 'OPEN';
 
@@ -88,7 +92,9 @@ export class DisputesService {
             startDate: true,
             endDate: true,
             total: true,
-            listing: { select: { id: true, title: true, location: true, ownerId: true } },
+            listing: {
+              select: { id: true, title: true, location: true, ownerId: true },
+            },
             renter: { select: { id: true, email: true, name: true } },
           },
         },
@@ -135,7 +141,11 @@ export class DisputesService {
       action: 'DISPUTE_DECISION',
       targetType: 'Dispute',
       targetId: disputeId,
-      metadata: { from: before.status, to: status, resolutionNotes: resolutionNotes ?? null },
+      metadata: {
+        from: before.status,
+        to: status,
+        resolutionNotes: resolutionNotes ?? null,
+      },
     });
 
     return updated;

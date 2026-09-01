@@ -14,7 +14,10 @@ import { AuthUserParam } from '../../common/decorators/auth-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
-import { STORAGE_SERVICE, type StorageService } from '../../common/storage/storage.interface';
+import {
+  STORAGE_SERVICE,
+  type StorageService,
+} from '../../common/storage/storage.interface';
 import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
 
@@ -48,10 +51,14 @@ export class ListingsUploadController {
     @UploadedFiles() files: Express.Multer.File[],
   ) {
     if (!files?.length) {
-      throw new BadRequestException('at least one image file is required (jpeg, png, or webp)');
+      throw new BadRequestException(
+        'at least one image file is required (jpeg, png, or webp)',
+      );
     }
 
-    const urls = await Promise.all(files.map((file) => this.storage.upload(file)));
+    const urls = await Promise.all(
+      files.map((file) => this.storage.upload(file)),
+    );
     return await this.listings.appendImages(user, id, urls);
   }
 }

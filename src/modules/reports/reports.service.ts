@@ -11,7 +11,11 @@ import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
 import { PrismaService } from '../../prisma/prisma.service';
 
-const REPORT_STATUSES: readonly ReportStatus[] = ['OPEN', 'RESOLVED', 'DISMISSED'];
+const REPORT_STATUSES: readonly ReportStatus[] = [
+  'OPEN',
+  'RESOLVED',
+  'DISMISSED',
+];
 const TARGET_TYPES: readonly ReportTargetType[] = ['LISTING', 'USER'];
 
 @Injectable()
@@ -77,7 +81,9 @@ export class ReportsService {
   async listForAdmin(admin: AuthUser, status?: string) {
     this.ensureAdmin(admin);
 
-    const filterStatus: ReportStatus = REPORT_STATUSES.includes(status as ReportStatus)
+    const filterStatus: ReportStatus = REPORT_STATUSES.includes(
+      status as ReportStatus,
+    )
       ? (status as ReportStatus)
       : 'OPEN';
 
@@ -107,7 +113,8 @@ export class ReportsService {
       throw new NotFoundException('report not found');
     }
 
-    const status: ReportStatus = decision === 'RESOLVE' ? 'RESOLVED' : 'DISMISSED';
+    const status: ReportStatus =
+      decision === 'RESOLVE' ? 'RESOLVED' : 'DISMISSED';
 
     const updated = await this.prisma.report.update({
       where: { id: reportId },
@@ -128,7 +135,12 @@ export class ReportsService {
       action: 'REPORT_RESOLUTION',
       targetType: 'Report',
       targetId: reportId,
-      metadata: { from: before.status, to: status, decision, note: note ?? null },
+      metadata: {
+        from: before.status,
+        to: status,
+        decision,
+        note: note ?? null,
+      },
     });
 
     return updated;

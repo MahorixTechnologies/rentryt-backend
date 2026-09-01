@@ -86,7 +86,10 @@ const VALID_LISTING_TYPES = new Set<ListingPatch['type']>([
 ]);
 
 function readListingType(value: unknown): NonNullable<ListingPatch['type']> {
-  if (typeof value === 'string' && VALID_LISTING_TYPES.has(value as ListingPatch['type'])) {
+  if (
+    typeof value === 'string' &&
+    VALID_LISTING_TYPES.has(value as ListingPatch['type'])
+  ) {
     return value as NonNullable<ListingPatch['type']>;
   }
   return 'Apartment';
@@ -163,15 +166,19 @@ export class ListingsController {
     const patch: ListingPatch = {};
 
     if (data.title != null) patch.title = readString(data.title);
-    if (data.description != null) patch.description = readString(data.description);
+    if (data.description != null)
+      patch.description = readString(data.description);
     if (data.location != null) patch.location = readString(data.location);
-    if (data.pricePerNight != null) patch.pricePerNight = readNumber(data.pricePerNight);
-    if (data.currency != null) patch.currency = data.currency === 'USD' ? 'USD' : 'NGN';
+    if (data.pricePerNight != null)
+      patch.pricePerNight = readNumber(data.pricePerNight);
+    if (data.currency != null)
+      patch.currency = data.currency === 'USD' ? 'USD' : 'NGN';
     if (data.rooms != null) patch.rooms = readNumber(data.rooms);
     if (data.bathrooms != null) patch.bathrooms = readNumber(data.bathrooms);
     if (data.type != null) patch.type = readListingType(data.type);
     if (data.images != null) patch.images = readStringArray(data.images);
-    if (data.amenities != null) patch.amenities = readStringArray(data.amenities);
+    if (data.amenities != null)
+      patch.amenities = readStringArray(data.amenities);
     if (data.rules != null) patch.rules = readStringArray(data.rules);
 
     return await this.listings.update(user, id, patch);

@@ -14,7 +14,9 @@ export function verifyPaystackSignature(
   secretKey: string,
 ): boolean {
   if (!signatureHeader) return false;
-  const expected = createHmac('sha512', secretKey).update(rawBody).digest('hex');
+  const expected = createHmac('sha512', secretKey)
+    .update(rawBody)
+    .digest('hex');
   return safeCompare(expected, signatureHeader);
 }
 
@@ -35,7 +37,9 @@ export function verifyFlutterwaveSignature(
 
   const hmacSignature = headers['flutterwave-signature'];
   if (hmacSignature) {
-    const expected = createHmac('sha256', secretHash).update(rawBody).digest('base64');
+    const expected = createHmac('sha256', secretHash)
+      .update(rawBody)
+      .digest('base64');
     if (safeCompare(expected, hmacSignature)) return true;
   }
 

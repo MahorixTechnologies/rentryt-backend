@@ -119,7 +119,14 @@ export class AuthService {
         phone: params.phone?.trim() || null,
         name: params.name?.trim() || null,
       },
-      select: { id: true, email: true, role: true, emailVerified: true, name: true, phone: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        emailVerified: true,
+        name: true,
+        phone: true,
+      },
     });
 
     const token = makeToken();
@@ -138,11 +145,7 @@ export class AuthService {
       body: `Your BlueRock verification code is ${token}. It expires in 24 hours.`,
     });
 
-    const accessToken = await this.signToken(
-      user.id,
-      user.email,
-      user.role as unknown as UserRole,
-    );
+    const accessToken = await this.signToken(user.id, user.email, user.role);
 
     return {
       accessToken,
@@ -185,18 +188,17 @@ export class AuthService {
       throw new UnauthorizedException('invalid credentials');
     }
 
-    const accessToken = await this.signToken(
-      user.id,
-      user.email,
-      user.role as unknown as UserRole,
-    );
+    const accessToken = await this.signToken(user.id, user.email, user.role);
     const { passwordHash, ...safeUser } = user;
     return { accessToken, user: safeUser };
   }
 
   async requestEmailVerification(emailInput: string) {
     const email = normalizeEmail(emailInput);
-    const user = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
     if (!user) return { success: true };
 
     const token = makeToken();
@@ -249,7 +251,10 @@ export class AuthService {
 
   async forgotPassword(emailInput: string) {
     const email = normalizeEmail(emailInput);
-    const user = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
     if (!user) return { success: true };
 
     const token = makeToken();
@@ -276,7 +281,9 @@ export class AuthService {
 
   async resetPassword(params: { token: string; newPassword: string }) {
     const password = requirePassword(params.newPassword);
-    const record = await this.prisma.token.findUnique({ where: { token: params.token } });
+    const record = await this.prisma.token.findUnique({
+      where: { token: params.token },
+    });
     if (!record || record.type !== 'PASSWORD_RESET') {
       throw new BadRequestException('invalid token');
     }
@@ -303,7 +310,10 @@ export class AuthService {
   }
 
   private async signToken(userId: string, email: string, role: UserRole) {
-    const expiresIn = this.config.get<string>('JWT_EXPIRES_IN', '7d') as StringValue;
+    const expiresIn = this.config.get<string>(
+      'JWT_EXPIRES_IN',
+      '7d',
+    ) as StringValue;
     return await this.jwt.signAsync(
       { sub: userId, email, role },
       { expiresIn },

@@ -24,7 +24,10 @@ import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, validationSchema: envValidationSchema }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      validationSchema: envValidationSchema,
+    }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     PrismaModule,
     AuthModule,

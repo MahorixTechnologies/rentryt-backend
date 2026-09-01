@@ -68,7 +68,10 @@ export class AdminReportsController {
   constructor(private readonly reports: ReportsService) {}
 
   @Get()
-  async list(@AuthUserParam() user: AuthUser, @Query('status') status?: string) {
+  async list(
+    @AuthUserParam() user: AuthUser,
+    @Query('status') status?: string,
+  ) {
     return await this.reports.listForAdmin(user, status);
   }
 

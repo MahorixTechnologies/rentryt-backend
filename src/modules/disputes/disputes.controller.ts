@@ -55,7 +55,10 @@ export class AdminDisputesController {
   constructor(private readonly disputes: DisputesService) {}
 
   @Get()
-  async list(@AuthUserParam() user: AuthUser, @Query('status') status?: string) {
+  async list(
+    @AuthUserParam() user: AuthUser,
+    @Query('status') status?: string,
+  ) {
     return await this.disputes.listForAdmin(user, status);
   }
 
@@ -67,14 +70,25 @@ export class AdminDisputesController {
   ) {
     const data = asRecord(body);
     const status = data.status;
-    if (status !== 'RESOLVED' && status !== 'REJECTED' && status !== 'UNDER_REVIEW') {
-      throw new BadRequestException("status must be 'RESOLVED', 'REJECTED', or 'UNDER_REVIEW'");
+    if (
+      status !== 'RESOLVED' &&
+      status !== 'REJECTED' &&
+      status !== 'UNDER_REVIEW'
+    ) {
+      throw new BadRequestException(
+        "status must be 'RESOLVED', 'REJECTED', or 'UNDER_REVIEW'",
+      );
     }
     const resolutionNotes = data.resolutionNotes;
     if (resolutionNotes != null && typeof resolutionNotes !== 'string') {
       throw new BadRequestException('resolutionNotes must be a string');
     }
 
-    return await this.disputes.decide(user, id, status, resolutionNotes ?? null);
+    return await this.disputes.decide(
+      user,
+      id,
+      status,
+      resolutionNotes ?? null,
+    );
   }
 }

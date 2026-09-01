@@ -46,12 +46,18 @@ export class ReviewsController {
     const rating = data.rating;
     const text = data.body;
     if (rating == null) throw new BadRequestException('rating is required');
-    if (typeof text !== 'string') throw new BadRequestException('body is required');
+    if (typeof text !== 'string')
+      throw new BadRequestException('body is required');
 
     const ratingNumber =
-      typeof rating === 'number' ? rating : typeof rating === 'string' ? Number(rating) : NaN;
+      typeof rating === 'number'
+        ? rating
+        : typeof rating === 'string'
+          ? Number(rating)
+          : NaN;
 
-    if (!Number.isFinite(ratingNumber)) throw new BadRequestException('rating must be a number');
+    if (!Number.isFinite(ratingNumber))
+      throw new BadRequestException('rating must be a number');
 
     return await this.reviews.createForListing(user, listingId, {
       rating: ratingNumber,
@@ -74,6 +80,11 @@ export class ReviewsController {
       throw new BadRequestException('response is required');
     }
 
-    return await this.reviews.respondAsOwner(user, listingId, reviewId, response.trim());
+    return await this.reviews.respondAsOwner(
+      user,
+      listingId,
+      reviewId,
+      response.trim(),
+    );
   }
 }

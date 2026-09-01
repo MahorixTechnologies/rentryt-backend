@@ -136,7 +136,11 @@ export class PaystackProvider implements PaymentProviderAdapter {
       return { success: false, raw: body };
     }
 
-    return { success: true, recipientCode: body.data?.recipient_code, raw: body };
+    return {
+      success: true,
+      recipientCode: body.data?.recipient_code,
+      raw: body,
+    };
   }
 
   /**
@@ -168,7 +172,8 @@ export class PaystackProvider implements PaymentProviderAdapter {
     return {
       success: true,
       providerTransferId:
-        body.data?.transfer_code ?? (body.data?.id != null ? String(body.data.id) : undefined),
+        body.data?.transfer_code ??
+        (body.data?.id != null ? String(body.data.id) : undefined),
       raw: body,
     };
   }

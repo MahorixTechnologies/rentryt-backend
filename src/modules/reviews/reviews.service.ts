@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
@@ -46,7 +51,8 @@ export class ReviewsService {
       where: { id: listingId },
       select: { id: true, status: true },
     });
-    if (!listing || !isListingPublic(listing.status)) throw new NotFoundException('listing not found');
+    if (!listing || !isListingPublic(listing.status))
+      throw new NotFoundException('listing not found');
 
     const booking = await this.prisma.booking.findFirst({
       where: {
@@ -85,10 +91,14 @@ export class ReviewsService {
     if (!listing) throw new NotFoundException('listing not found');
 
     if (owner.role !== UserRole.LANDLORD || owner.id !== listing.ownerId) {
-      throw new ForbiddenException('only the listing owner can respond to reviews');
+      throw new ForbiddenException(
+        'only the listing owner can respond to reviews',
+      );
     }
 
-    const review = await this.prisma.review.findUnique({ where: { id: reviewId } });
+    const review = await this.prisma.review.findUnique({
+      where: { id: reviewId },
+    });
     if (!review || review.listingId !== listingId) {
       throw new NotFoundException('review not found');
     }

@@ -108,7 +108,10 @@ export class AdminController {
   }
 
   @Get('audit-logs')
-  async auditLogs(@AuthUserParam() user: AuthUser, @Query('limit') limit?: string) {
+  async auditLogs(
+    @AuthUserParam() user: AuthUser,
+    @Query('limit') limit?: string,
+  ) {
     return await this.admin.auditLogs(user, limit);
   }
 
@@ -141,7 +144,10 @@ export class AdminController {
    * `id` is the Payment row's own id (not a booking id).
    */
   @Post('payments/:id/refund')
-  async refundPayment(@AuthUserParam() user: AuthUser, @Param('id') id: string) {
+  async refundPayment(
+    @AuthUserParam() user: AuthUser,
+    @Param('id') id: string,
+  ) {
     return await this.admin.refundPayment(user, id);
   }
 
@@ -150,7 +156,10 @@ export class AdminController {
    * see AdminService.processPayout / PayoutsService.process.
    */
   @Post('payouts/:id/process')
-  async processPayout(@AuthUserParam() user: AuthUser, @Param('id') id: string) {
+  async processPayout(
+    @AuthUserParam() user: AuthUser,
+    @Param('id') id: string,
+  ) {
     return await this.admin.processPayout(user, id);
   }
 
@@ -160,7 +169,10 @@ export class AdminController {
    * admins must never be able to send-as a participant or alter history.
    */
   @Get('conversations/:id/messages')
-  async conversationMessages(@AuthUserParam() user: AuthUser, @Param('id') id: string) {
+  async conversationMessages(
+    @AuthUserParam() user: AuthUser,
+    @Param('id') id: string,
+  ) {
     return await this.admin.conversationMessages(user, id);
   }
 }

@@ -7,7 +7,13 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import type { Currency, Payment, PaymentProvider, PaymentPurpose, Prisma } from '@prisma/client';
+import type {
+  Currency,
+  Payment,
+  PaymentProvider,
+  PaymentPurpose,
+  Prisma,
+} from '@prisma/client';
 
 import { recordAuditLog } from '../../common/audit/audit-log';
 import {
@@ -20,10 +26,16 @@ import { UserRole } from '../../common/types/auth';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BookingsService } from '../bookings/bookings.service';
 import { ListingsService } from '../listings/listings.service';
-import { NotificationsService, NotificationType } from '../notifications/notifications.service';
+import {
+  NotificationsService,
+  NotificationType,
+} from '../notifications/notifications.service';
 
 import { PaymentProviderRegistry } from './payment-provider.registry';
-import { verifyFlutterwaveSignature, verifyPaystackSignature } from './webhook-signature';
+import {
+  verifyFlutterwaveSignature,
+  verifyPaystackSignature,
+} from './webhook-signature';
 
 const MOBILE_CALLBACK_PREFIX = 'bluerockmobile://';
 
@@ -96,7 +108,8 @@ export class PaymentsService {
         },
       });
       if (!booking) throw new NotFoundException('booking not found');
-      if (booking.renterId !== payer.id) throw new ForbiddenException('not allowed');
+      if (booking.renterId !== payer.id)
+        throw new ForbiddenException('not allowed');
       if (booking.paymentStatus === 'PAID') {
         throw new BadRequestException('booking is already paid');
       }
@@ -146,19 +159,23 @@ export class PaymentsService {
       },
     });
 
-    const { authorizationUrl } = await this.providers.get(params.provider).initialize({
-      amount,
-      currency,
-      email: payerEmail,
-      reference,
-      callbackUrl: params.callbackUrl,
-    });
+    const { authorizationUrl } = await this.providers
+      .get(params.provider)
+      .initialize({
+        amount,
+        currency,
+        email: payerEmail,
+        reference,
+        callbackUrl: params.callbackUrl,
+      });
 
     return { authorizationUrl, reference: payment.reference };
   }
 
   async verify(params: VerifyParams) {
-    const payment = await this.prisma.payment.findUnique({ where: { reference: params.reference } });
+    const payment = await this.prisma.payment.findUnique({
+      where: { reference: params.reference },
+    });
     if (!payment) throw new NotFoundException('payment not found');
     if (params.callerId && payment.payerId !== params.callerId) {
       throw new ForbiddenException('not allowed');
@@ -170,7 +187,10 @@ export class PaymentsService {
 
     const result = await this.providers.get(payment.provider).verify({
       reference: payment.reference,
-      providerTransactionId: params.providerTransactionId ?? payment.providerTransactionId ?? undefined,
+      providerTransactionId:
+        params.providerTransactionId ??
+        payment.providerTransactionId ??
+        undefined,
     });
 
     const amountOk = Math.round(result.amount) >= payment.amount;
@@ -182,7 +202,8 @@ export class PaymentsService {
         data: {
           status: 'FAILED',
           rawPayload: result.raw as Prisma.InputJsonValue,
-          providerTransactionId: params.providerTransactionId ?? payment.providerTransactionId,
+          providerTransactionId:
+            params.providerTransactionId ?? payment.providerTransactionId,
         },
       });
       return { success: false };
@@ -196,7 +217,8 @@ export class PaymentsService {
       data: {
         status: 'SUCCESSFUL',
         rawPayload: result.raw as Prisma.InputJsonValue,
-        providerTransactionId: params.providerTransactionId ?? payment.providerTransactionId,
+        providerTransactionId:
+          params.providerTransactionId ?? payment.providerTransactionId,
       },
     });
 
@@ -218,15 +240,22 @@ export class PaymentsService {
    * verify() uses for INITIATED -> SUCCESSFUL — so a manual refund racing
    * the automatic job can't double-apply the completion effect.
    */
-  async refund(params: RefundParams): Promise<{ success: boolean; alreadyRefunded?: boolean }> {
+  async refund(
+    params: RefundParams,
+  ): Promise<{ success: boolean; alreadyRefunded?: boolean }> {
     if (!params.paymentId && !params.bookingId) {
       throw new BadRequestException('paymentId or bookingId is required');
     }
 
     const payment = params.paymentId
-      ? await this.prisma.payment.findUnique({ where: { id: params.paymentId } })
+      ? await this.prisma.payment.findUnique({
+          where: { id: params.paymentId },
+        })
       : await this.prisma.payment.findFirst({
-          where: { bookingId: params.bookingId, status: { in: ['SUCCESSFUL', 'REFUNDED'] } },
+          where: {
+            bookingId: params.bookingId,
+            status: { in: ['SUCCESSFUL', 'REFUNDED'] },
+          },
           orderBy: { createdAt: 'desc' },
         });
 
@@ -236,7 +265,9 @@ export class PaymentsService {
       return { success: true, alreadyRefunded: true };
     }
     if (payment.status !== 'SUCCESSFUL') {
-      throw new BadRequestException('only a successful payment can be refunded');
+      throw new BadRequestException(
+        'only a successful payment can be refunded',
+      );
     }
 
     const result = await this.providers.get(payment.provider).refund({
@@ -246,7 +277,9 @@ export class PaymentsService {
     });
 
     if (!result.success) {
-      throw new InternalServerErrorException('refund was rejected by the payment provider');
+      throw new InternalServerErrorException(
+        'refund was rejected by the payment provider',
+      );
     }
 
     const { count } = await this.prisma.payment.updateMany({
@@ -260,7 +293,10 @@ export class PaymentsService {
     if (count === 1) {
       if (payment.bookingId) {
         await this.prisma.booking.updateMany({
-          where: { id: payment.bookingId, paymentStatus: { in: ['PAID', 'REFUND_PENDING'] } },
+          where: {
+            id: payment.bookingId,
+            paymentStatus: { in: ['PAID', 'REFUND_PENDING'] },
+          },
           data: { paymentStatus: 'REFUNDED' },
         });
       }
@@ -284,7 +320,11 @@ export class PaymentsService {
         type: NotificationType.PAYMENT_REFUNDED,
         title: 'Refund processed',
         body: `Your payment of ${payment.amount} ${payment.currency} has been refunded.`,
-        data: { paymentId: payment.id, bookingId: payment.bookingId, amount: payment.amount },
+        data: {
+          paymentId: payment.id,
+          bookingId: payment.bookingId,
+          amount: payment.amount,
+        },
       });
     }
 
@@ -295,7 +335,10 @@ export class PaymentsService {
     if (payment.purpose === 'BOOKING' && payment.bookingId) {
       await this.bookings.markPaidAfterVerifiedPayment(payment.bookingId);
     } else if (payment.purpose === 'FEATURED_LISTING' && payment.listingId) {
-      await this.listings.activateFeaturedListing(payment.listingId, payment.reference);
+      await this.listings.activateFeaturedListing(
+        payment.listingId,
+        payment.reference,
+      );
     }
   }
 
@@ -306,7 +349,13 @@ export class PaymentsService {
   ) {
     if (provider === 'PAYSTACK') {
       const secret = process.env.PAYSTACK_SECRET_KEY ?? '';
-      if (!verifyPaystackSignature(rawBody, headers['x-paystack-signature'], secret)) {
+      if (
+        !verifyPaystackSignature(
+          rawBody,
+          headers['x-paystack-signature'],
+          secret,
+        )
+      ) {
         throw new ForbiddenException('invalid signature');
       }
       const payload = JSON.parse(rawBody.toString('utf8'));
@@ -330,9 +379,12 @@ export class PaymentsService {
       }
       const payload = JSON.parse(rawBody.toString('utf8'));
       const reference = payload?.data?.tx_ref;
-      const providerTransactionId = payload?.data?.id != null ? String(payload.data.id) : undefined;
+      const providerTransactionId =
+        payload?.data?.id != null ? String(payload.data.id) : undefined;
       if (typeof reference === 'string') {
-        await this.verify({ reference, providerTransactionId }).catch(() => undefined);
+        await this.verify({ reference, providerTransactionId }).catch(
+          () => undefined,
+        );
       }
     }
 
