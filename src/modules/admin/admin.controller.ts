@@ -38,8 +38,21 @@ export class AdminController {
   }
 
   @Get('users')
-  async users(@AuthUserParam() user: AuthUser) {
-    return await this.admin.users(user);
+  async users(
+    @AuthUserParam() user: AuthUser,
+    @Query('role') role?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return await this.admin.users(user, {
+      role,
+      status,
+      search,
+      page,
+      pageSize,
+    });
   }
 
   @Get('users/:id')
@@ -48,13 +61,90 @@ export class AdminController {
   }
 
   @Get('listings')
-  async listings(@AuthUserParam() user: AuthUser) {
-    return await this.admin.listings(user);
+  async listings(
+    @AuthUserParam() user: AuthUser,
+    @Query('status') status?: string,
+    @Query('ownerId') ownerId?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return await this.admin.listings(user, {
+      status,
+      ownerId,
+      search,
+      page,
+      pageSize,
+    });
   }
 
   @Get('bookings')
-  async bookings(@AuthUserParam() user: AuthUser) {
-    return await this.admin.bookings(user);
+  async bookings(
+    @AuthUserParam() user: AuthUser,
+    @Query('status') status?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('renterId') renterId?: string,
+    @Query('listingId') listingId?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return await this.admin.bookings(user, {
+      status,
+      paymentStatus,
+      renterId,
+      listingId,
+      page,
+      pageSize,
+    });
+  }
+
+  @Get('bookings/:id')
+  async booking(@AuthUserParam() user: AuthUser, @Param('id') id: string) {
+    return await this.admin.booking(user, id);
+  }
+
+  @Get('payments')
+  async payments(
+    @AuthUserParam() user: AuthUser,
+    @Query('status') status?: string,
+    @Query('purpose') purpose?: string,
+    @Query('payerId') payerId?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return await this.admin.listPayments(user, {
+      status,
+      purpose,
+      payerId,
+      search,
+      page,
+      pageSize,
+    });
+  }
+
+  @Get('payments/:id')
+  async payment(@AuthUserParam() user: AuthUser, @Param('id') id: string) {
+    return await this.admin.getPayment(user, id);
+  }
+
+  @Get('reviews')
+  async reviews(
+    @AuthUserParam() user: AuthUser,
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return await this.admin.reviews(user, { status, page, pageSize });
+  }
+
+  @Get('conversations')
+  async conversations(
+    @AuthUserParam() user: AuthUser,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return await this.admin.conversationsList(user, { page, pageSize });
   }
 
   @Patch('users/:id/status')
@@ -110,9 +200,19 @@ export class AdminController {
   @Get('audit-logs')
   async auditLogs(
     @AuthUserParam() user: AuthUser,
-    @Query('limit') limit?: string,
+    @Query('action') action?: string,
+    @Query('targetType') targetType?: string,
+    @Query('actorId') actorId?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    return await this.admin.auditLogs(user, limit);
+    return await this.admin.auditLogs(user, {
+      action,
+      targetType,
+      actorId,
+      page,
+      pageSize,
+    });
   }
 
   @Get('fee-rules')

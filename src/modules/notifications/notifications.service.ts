@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
 import { EmailService } from '../../common/email/email.service';
+import {
+  buildOtpEmailHtml,
+  buildOtpEmailText,
+} from '../../common/email/email-templates';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
@@ -63,14 +67,52 @@ export class NotificationsService {
     });
 
     if (user?.email) {
+      const otp = this.buildOtpEmailParts(params);
       await this.email.send({
         to: user.email,
         subject: params.title,
-        html: `<p>${params.body}</p>`,
-        text: params.body,
+        html: otp?.html ?? `<p>${params.body}</p>`,
+        text: otp?.text ?? params.body,
       });
     }
 
     return notification;
+  }
+
+  /**
+   * EMAIL_VERIFICATION and PASSWORD_RESET carry a `data.code`/`data.expiryMinutes`
+   * pair (set by AuthService) and get the branded OTP template instead of the
+   * generic `<p>${body}</p>` wrapper every other notification type uses.
+   */
+  private buildOtpEmailParts(
+    params: NotifyParams,
+  ): { html: string; text: string } | null {
+    if (
+      params.type !== NotificationType.EMAIL_VERIFICATION &&
+      params.type !== NotificationType.PASSWORD_RESET
+    ) {
+      return null;
+    }
+
+    const code = params.data?.code;
+    const expiryMinutes = params.data?.expiryMinutes;
+    if (typeof code !== 'string' || typeof expiryMinutes !== 'number') {
+      return null;
+    }
+
+    const isReset = params.type === NotificationType.PASSWORD_RESET;
+    const shared = {
+      heading: params.title,
+      intro: isReset
+        ? "Enter this code to reset your BlueRock password. If you didn't request this, you can ignore this email."
+        : 'Enter this code to verify your email address and finish setting up your BlueRock account.',
+      code,
+      expiryMinutes,
+    };
+
+    return {
+      html: buildOtpEmailHtml(shared),
+      text: buildOtpEmailText(shared),
+    };
   }
 }

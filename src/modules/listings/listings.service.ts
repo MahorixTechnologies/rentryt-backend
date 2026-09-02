@@ -134,6 +134,77 @@ export class ListingsService {
     }));
   }
 
+  /**
+   * Global full-text search, backing the shared `GET /search` endpoint used
+   * by web, mobile, and admin alike. Distinct from listPublic()'s `q` filter
+   * (a simple `contains` match on 3 columns, still used by the structured
+   * filter UI) — this ranks by relevance across title/location/amenities/
+   * description via the "searchVector" generated column (see
+   * prisma/migrations/*_listing_search_vector*), with title matches weighted
+   * above location, above amenities, above description.
+   */
+  async globalSearch(params: {
+    q: string;
+    limit?: number;
+    viewerEmail?: string | null;
+  }) {
+    const q = params.q.trim();
+    if (!q) return { listings: [] };
+
+    const limit = Math.min(Math.max(Math.trunc(params.limit ?? 20), 1), 50);
+    const viewerIsDemo = isDemoAccountEmail(params.viewerEmail);
+
+    const ranked = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id
+      FROM "Listing"
+      WHERE status = 'APPROVED'
+        AND "searchVector" @@ plainto_tsquery('english', ${q})
+      ORDER BY ts_rank("searchVector", plainto_tsquery('english', ${q})) DESC
+      LIMIT ${limit}
+    `;
+    if (!ranked.length) return { listings: [] };
+
+    const ids = ranked.map((row) => row.id);
+    const listings = await this.prisma.listing.findMany({
+      where: {
+        id: { in: ids },
+        ...(viewerIsDemo
+          ? {}
+          : { owner: { email: { notIn: DEMO_ACCOUNT_EMAILS } } }),
+      },
+      select: {
+        id: true,
+        title: true,
+        location: true,
+        pricePerNight: true,
+        currency: true,
+        rooms: true,
+        bathrooms: true,
+        type: true,
+        images: true,
+        amenities: true,
+        status: true,
+        featured: true,
+        featuredUntil: true,
+        owner: { select: { id: true, name: true, phone: true } },
+        createdAt: true,
+      },
+    });
+
+    // findMany's `id: { in: ids }` does not preserve the raw query's rank
+    // order, so re-sort to match `ranked` (and drop any id findMany filtered
+    // out, e.g. a demo listing hidden from a non-demo viewer).
+    const byId = new Map(listings.map((listing) => [listing.id, listing]));
+    const ordered = ids
+      .map((id) => byId.get(id))
+      .filter(
+        (listing): listing is NonNullable<typeof listing> => listing != null,
+      )
+      .map((listing) => ({ ...listing, featured: isFeaturedActive(listing) }));
+
+    return { listings: ordered };
+  }
+
   async listMine(owner: AuthUser) {
     if (owner.role !== UserRole.LANDLORD) {
       throw new ForbiddenException('only landlords can view their listings');

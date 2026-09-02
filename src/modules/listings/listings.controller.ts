@@ -11,8 +11,8 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 
+import { OptionalViewerService } from '../../common/auth/optional-viewer.service';
 import { AuthUserParam } from '../../common/decorators/auth-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -21,8 +21,6 @@ import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
 
 import { ListingsService } from './listings.service';
-
-type JwtPayload = { sub: string; email: string; role: UserRole };
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -103,25 +101,8 @@ function readListingType(value: unknown): NonNullable<ListingPatch['type']> {
 export class ListingsController {
   constructor(
     private readonly listings: ListingsService,
-    private readonly jwt: JwtService,
+    private readonly optionalViewer: OptionalViewerService,
   ) {}
-
-  /**
-   * Best-effort viewer identity for endpoints that stay public either way
-   * (anonymous browsing must keep working) but want to know who's asking —
-   * e.g. to let a demo account see the seeded catalogue. Never throws: a
-   * missing/expired/invalid token is treated the same as no token.
-   */
-  private async decodeViewer(authHeader?: string): Promise<AuthUser | null> {
-    const token = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
-    if (!token) return null;
-    try {
-      const payload = await this.jwt.verifyAsync<JwtPayload>(token);
-      return { id: payload.sub, email: payload.email, role: payload.role };
-    } catch {
-      return null;
-    }
-  }
 
   @Get()
   async list(
@@ -136,7 +117,7 @@ export class ListingsController {
     const min = minPrice != null ? Number(minPrice) : undefined;
     const max = maxPrice != null ? Number(maxPrice) : undefined;
     const r = rooms != null ? Number(rooms) : undefined;
-    const viewer = await this.decodeViewer(authHeader);
+    const viewer = await this.optionalViewer.decode(authHeader);
     return await this.listings.listPublic({
       q,
       location,
@@ -160,7 +141,7 @@ export class ListingsController {
     @Param('id') id: string,
     @Headers('authorization') authHeader: string | undefined,
   ) {
-    const viewer = await this.decodeViewer(authHeader);
+    const viewer = await this.optionalViewer.decode(authHeader);
     return await this.listings.getById(id, viewer);
   }
 

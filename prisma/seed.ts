@@ -648,33 +648,27 @@ async function main() {
     skipDuplicates: true,
   });
 
+  await prisma.token.deleteMany({
+    where: {
+      OR: [
+        { userId: renter2.id, type: 'EMAIL_VERIFY' },
+        { userId: renter.id, type: 'PASSWORD_RESET' },
+      ],
+    },
+  });
   const tokens = await Promise.all([
-    prisma.token.upsert({
-      where: { token: 'seed-email-verify-renter2' },
-      update: {
-        userId: renter2.id,
-        type: 'EMAIL_VERIFY',
-        expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
-        usedAt: null,
-      },
-      create: {
-        token: 'seed-email-verify-renter2',
+    prisma.token.create({
+      data: {
+        token: '000000',
         userId: renter2.id,
         type: 'EMAIL_VERIFY',
         expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
       },
       select: { id: true, type: true, token: true, userId: true },
     }),
-    prisma.token.upsert({
-      where: { token: 'seed-password-reset-renter' },
-      update: {
-        userId: renter.id,
-        type: 'PASSWORD_RESET',
-        expiresAt: new Date(Date.now() + 1000 * 60 * 30),
-        usedAt: new Date(),
-      },
-      create: {
-        token: 'seed-password-reset-renter',
+    prisma.token.create({
+      data: {
+        token: '111111',
         userId: renter.id,
         type: 'PASSWORD_RESET',
         expiresAt: new Date(Date.now() + 1000 * 60 * 30),

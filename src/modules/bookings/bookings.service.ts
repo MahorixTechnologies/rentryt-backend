@@ -70,23 +70,17 @@ export class BookingsService {
     throw new ForbiddenException('not allowed');
   }
 
-  async createBooking(
-    renter: AuthUser,
-    params: { listingId: string; startDate: string; endDate: string },
+  private async createBookingRecord(
+    renterId: string,
+    listing: {
+      id: string;
+      pricePerNight: number;
+    },
+    startDate: string,
+    endDate: string,
   ) {
-    if (renter.role !== UserRole.RENTER) {
-      throw new ForbiddenException('renters only');
-    }
-
-    const listing = await this.prisma.listing.findUnique({
-      where: { id: params.listingId },
-    });
-    if (!listing || !isListingPublic(listing.status)) {
-      throw new NotFoundException('listing not found');
-    }
-
-    const start = parseDate(params.startDate);
-    const end = parseDate(params.endDate);
+    const start = parseDate(startDate);
+    const end = parseDate(endDate);
     const nights = diffNights(start, end);
     if (nights <= 0)
       throw new BadRequestException('endDate must be after startDate');
@@ -117,7 +111,7 @@ export class BookingsService {
     return await this.prisma.booking.create({
       data: {
         listingId: listing.id,
-        renterId: renter.id,
+        renterId,
         startDate: start,
         endDate: end,
         nights,
@@ -139,6 +133,74 @@ export class BookingsService {
         },
       },
     });
+  }
+
+  async createBooking(
+    renter: AuthUser,
+    params: { listingId: string; startDate: string; endDate: string },
+  ) {
+    if (renter.role !== UserRole.RENTER) {
+      throw new ForbiddenException('renters only');
+    }
+
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: params.listingId },
+    });
+    if (!listing || !isListingPublic(listing.status)) {
+      throw new NotFoundException('listing not found');
+    }
+
+    return await this.createBookingRecord(
+      renter.id,
+      listing,
+      params.startDate,
+      params.endDate,
+    );
+  }
+
+  /**
+   * LANDLORD creates a booking on behalf of a renter (e.g. a walk-in or
+   * phone booking). Only allowed for a listing the landlord owns, and only
+   * for an existing RENTER-role user — resolved via GET
+   * /users/lookup-renter beforehand, never trusted from an arbitrary id.
+   */
+  async createBookingForRenter(
+    landlord: AuthUser,
+    params: {
+      listingId: string;
+      renterId: string;
+      startDate: string;
+      endDate: string;
+    },
+  ) {
+    if (landlord.role !== UserRole.LANDLORD) {
+      throw new ForbiddenException('landlords only');
+    }
+
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: params.listingId },
+    });
+    if (!listing) {
+      throw new NotFoundException('listing not found');
+    }
+    if (listing.ownerId !== landlord.id) {
+      throw new ForbiddenException('not allowed');
+    }
+
+    const renter = await this.prisma.user.findUnique({
+      where: { id: params.renterId },
+      select: { id: true, role: true },
+    });
+    if (!renter || renter.role !== UserRole.RENTER) {
+      throw new NotFoundException('renter not found');
+    }
+
+    return await this.createBookingRecord(
+      renter.id,
+      listing,
+      params.startDate,
+      params.endDate,
+    );
   }
 
   async listMyBookings(user: AuthUser) {

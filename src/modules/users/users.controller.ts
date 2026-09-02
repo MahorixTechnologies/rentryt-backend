@@ -6,12 +6,16 @@ import {
   NotFoundException,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 
 import { AuthUserParam } from '../../common/decorators/auth-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthUser } from '../../common/types/auth';
+import { UserRole } from '../../common/types/auth';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Controller('users')
@@ -68,6 +72,29 @@ export class UsersController {
         phone: true,
       },
     });
+  }
+
+  /**
+   * Lets a landlord look up a renter by exact email when creating a booking
+   * on their behalf (see BookingsController.createForRenter). Scoped to
+   * LANDLORD and returns only the minimal fields needed to confirm identity
+   * and pass a renterId back in — never a full user directory.
+   */
+  @Get('lookup-renter')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.LANDLORD)
+  async lookupRenter(@Query('email') email?: string) {
+    if (typeof email !== 'string' || email.trim().length === 0) {
+      throw new BadRequestException('email is required');
+    }
+    const renter = await this.prisma.user.findFirst({
+      where: { email: email.trim().toLowerCase(), role: 'RENTER' },
+      select: { id: true, name: true, email: true, phone: true },
+    });
+    if (!renter) {
+      throw new NotFoundException('no renter found with that email');
+    }
+    return renter;
   }
 
   @Post('me/owner-application')

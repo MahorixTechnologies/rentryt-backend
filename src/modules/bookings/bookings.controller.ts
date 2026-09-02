@@ -68,6 +68,43 @@ export class BookingsController {
     return await this.bookings.listOwnerBookings(user);
   }
 
+  /** LANDLORD books one of their own listings on behalf of a renter. */
+  @Post('owner')
+  @Roles(UserRole.LANDLORD)
+  async createForRenter(
+    @AuthUserParam() user: AuthUser,
+    @Body()
+    body: {
+      listingId?: unknown;
+      renterId?: unknown;
+      startDate?: unknown;
+      endDate?: unknown;
+    },
+  ) {
+    const data = asRecord(body);
+    const listingId = data.listingId;
+    const renterId = data.renterId;
+    const startDate = data.startDate;
+    const endDate = data.endDate;
+
+    if (typeof listingId !== 'string' || listingId.trim().length === 0) {
+      throw new BadRequestException('listingId is required');
+    }
+    if (typeof renterId !== 'string' || renterId.trim().length === 0) {
+      throw new BadRequestException('renterId is required');
+    }
+    if (typeof startDate !== 'string' || typeof endDate !== 'string') {
+      throw new BadRequestException('startDate and endDate are required');
+    }
+
+    return await this.bookings.createBookingForRenter(user, {
+      listingId,
+      renterId,
+      startDate,
+      endDate,
+    });
+  }
+
   @Patch(':id/decision')
   @Roles(UserRole.LANDLORD)
   async decide(

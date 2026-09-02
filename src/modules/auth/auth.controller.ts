@@ -66,12 +66,16 @@ export class AuthController {
   }
 
   @Post('verify-email')
-  async verifyEmail(@Body() body: { token?: unknown }) {
-    const token = body.token;
-    if (typeof token !== 'string' || token.trim().length === 0) {
-      throw new BadRequestException('token is required');
+  async verifyEmail(@Body() body: { email?: unknown; code?: unknown }) {
+    const email = body.email;
+    const code = body.code;
+    if (typeof email !== 'string' || email.trim().length === 0) {
+      throw new BadRequestException('email is required');
     }
-    return await this.auth.verifyEmail(token);
+    if (typeof code !== 'string' || code.trim().length === 0) {
+      throw new BadRequestException('code is required');
+    }
+    return await this.auth.verifyEmail({ email, code });
   }
 
   @Post('forgot-password')
@@ -85,16 +89,20 @@ export class AuthController {
 
   @Post('reset-password')
   async resetPassword(
-    @Body() body: { token?: unknown; newPassword?: unknown },
+    @Body() body: { email?: unknown; code?: unknown; newPassword?: unknown },
   ) {
-    const token = body.token;
+    const email = body.email;
+    const code = body.code;
     const newPassword = body.newPassword;
-    if (typeof token !== 'string' || token.trim().length === 0) {
-      throw new BadRequestException('token is required');
+    if (typeof email !== 'string' || email.trim().length === 0) {
+      throw new BadRequestException('email is required');
+    }
+    if (typeof code !== 'string' || code.trim().length === 0) {
+      throw new BadRequestException('code is required');
     }
     if (typeof newPassword !== 'string') {
       throw new BadRequestException('newPassword is required');
     }
-    return await this.auth.resetPassword({ token, newPassword });
+    return await this.auth.resetPassword({ email, code, newPassword });
   }
 }

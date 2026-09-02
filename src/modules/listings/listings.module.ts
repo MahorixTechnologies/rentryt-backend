@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { AuthModule } from '../auth/auth.module';
+import { OptionalViewerModule } from '../../common/auth/optional-viewer.module';
 import { StorageModule } from '../../common/storage/storage.module';
 
 import { ListingsController } from './listings.controller';
@@ -8,7 +8,7 @@ import { ListingsUploadController } from './listings-upload.controller';
 import { ListingsService } from './listings.service';
 
 @Module({
-  imports: [StorageModule, AuthModule],
+  imports: [StorageModule, OptionalViewerModule],
   controllers: [ListingsController, ListingsUploadController],
   providers: [ListingsService],
   exports: [ListingsService],

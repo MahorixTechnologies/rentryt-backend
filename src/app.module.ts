@@ -20,6 +20,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { PayoutsModule } from './modules/payouts/payouts.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
+import { SearchModule } from './modules/search/search.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -34,6 +35,7 @@ import { UsersModule } from './modules/users/users.module';
     UsersModule,
     NotificationsModule,
     ListingsModule,
+    SearchModule,
     BookingsModule,
     ConversationsModule,
     PaymentsModule,

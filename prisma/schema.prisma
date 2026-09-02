@@ -186,6 +186,14 @@ model Listing {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
+  // Generated/stored column (title weighted above location, above amenities,
+  // above description) — not writable through Prisma, maintained entirely by
+  // Postgres. Populated and indexed by a hand-written migration since Prisma
+  // can't generate GENERATED ALWAYS AS ... STORED DDL for an Unsupported
+  // type; see prisma/migrations/*_add_listing_search_vector. Read via
+  // ListingsService.globalSearch()'s raw query, never selected normally.
+  searchVector Unsupported("tsvector")?
+
   bookings      Booking[]
   reviews       Review[]
   payments      Payment[]
@@ -250,7 +258,8 @@ model Token {
   userId    String
   user      User      @relation(fields: [userId], references: [id])
   type      TokenType
-  token     String    @unique
+  token     String
+  attempts  Int       @default(0)
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())

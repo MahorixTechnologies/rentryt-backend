@@ -112,7 +112,7 @@ All data modeling happens in `prisma/schema.prisma`. Read the existing schema fi
 | Listing | `Listing` (owner → User, type: House/Apartment, status: PENDING/APPROVED/REJECTED) |
 | Booking | `Booking` (listing, renter, subtotal/serviceFee/total, BookingStatus, PaymentStatus) |
 | Review | `Review` (listing, renter, rating, body) |
-| Token | `Token` (EMAIL_VERIFY / PASSWORD_RESET, expiresAt, usedAt) |
+| Token | `Token` (EMAIL_VERIFY / PASSWORD_RESET, 6-digit numeric `token` (OTP, not globally unique — looked up by `userId`+`type`), `attempts`, expiresAt, usedAt) |
 
 ### 4.2 Migrations
 
@@ -189,10 +189,12 @@ The module must be imported in `app.module.ts`.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `POST` | `/auth/register` | none | creates User + returns `{accessToken, user}` |
+| `POST` | `/auth/register` | none | creates User + returns `{accessToken, user}`; emails a 6-digit EMAIL_VERIFY code |
 | `POST` | `/auth/login` | none | issue JWT from credentials |
-| `POST` | `/auth/forgot-password` | none | create PASSWORD_RESET token |
-| `POST` | `/auth/reset-password` | none | consume reset token + set new hash |
+| `POST` | `/auth/request-email-verification` | none | `{email}` → (re)issues + emails a fresh 6-digit code |
+| `POST` | `/auth/verify-email` | none | `{email, code}` → marks `User.emailVerified = true` |
+| `POST` | `/auth/forgot-password` | none | `{email}` → issues + emails a 6-digit PASSWORD_RESET code |
+| `POST` | `/auth/reset-password` | none | `{email, code, newPassword}` → consume code + set new hash |
 
 ### 6.2 Users
 
