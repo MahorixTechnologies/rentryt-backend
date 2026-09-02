@@ -4,12 +4,14 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 
 import { AuthUserParam } from '../../common/decorators/auth-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -19,6 +21,8 @@ import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
 
 import { ListingsService } from './listings.service';
+
+type JwtPayload = { sub: string; email: string; role: UserRole };
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -97,10 +101,31 @@ function readListingType(value: unknown): NonNullable<ListingPatch['type']> {
 
 @Controller('listings')
 export class ListingsController {
-  constructor(private readonly listings: ListingsService) {}
+  constructor(
+    private readonly listings: ListingsService,
+    private readonly jwt: JwtService,
+  ) {}
+
+  /**
+   * Best-effort viewer identity for endpoints that stay public either way
+   * (anonymous browsing must keep working) but want to know who's asking —
+   * e.g. to let a demo account see the seeded catalogue. Never throws: a
+   * missing/expired/invalid token is treated the same as no token.
+   */
+  private async decodeViewer(authHeader?: string): Promise<AuthUser | null> {
+    const token = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!token) return null;
+    try {
+      const payload = await this.jwt.verifyAsync<JwtPayload>(token);
+      return { id: payload.sub, email: payload.email, role: payload.role };
+    } catch {
+      return null;
+    }
+  }
 
   @Get()
   async list(
+    @Headers('authorization') authHeader: string | undefined,
     @Query('q') q?: string,
     @Query('location') location?: string,
     @Query('minPrice') minPrice?: string,
@@ -111,6 +136,7 @@ export class ListingsController {
     const min = minPrice != null ? Number(minPrice) : undefined;
     const max = maxPrice != null ? Number(maxPrice) : undefined;
     const r = rooms != null ? Number(rooms) : undefined;
+    const viewer = await this.decodeViewer(authHeader);
     return await this.listings.listPublic({
       q,
       location,
@@ -118,6 +144,7 @@ export class ListingsController {
       maxPrice: Number.isFinite(max) ? max : undefined,
       type,
       rooms: Number.isFinite(r) ? r : undefined,
+      viewerEmail: viewer?.email ?? null,
     });
   }
 
@@ -129,8 +156,12 @@ export class ListingsController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string) {
-    return await this.listings.getById(id, null);
+  async get(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader: string | undefined,
+  ) {
+    const viewer = await this.decodeViewer(authHeader);
+    return await this.listings.getById(id, viewer);
   }
 
   @Post()

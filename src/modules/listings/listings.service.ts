@@ -6,6 +6,10 @@ import {
 } from '@nestjs/common';
 
 import { recordAuditLog } from '../../common/audit/audit-log';
+import {
+  DEMO_ACCOUNT_EMAILS,
+  isDemoAccountEmail,
+} from '../../common/constants/demo-accounts';
 import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
 import {
@@ -66,6 +70,7 @@ export class ListingsService {
     maxPrice?: number;
     type?: string;
     rooms?: number;
+    viewerEmail?: string | null;
   }) {
     const q = params.q?.trim();
     const location = params.location?.trim();
@@ -74,10 +79,14 @@ export class ListingsService {
       PUBLIC_TYPES.includes(params.type as CreateListingInput['type'])
         ? (params.type as CreateListingInput['type'])
         : undefined;
+    const viewerIsDemo = isDemoAccountEmail(params.viewerEmail);
 
     const listings = await this.prisma.listing.findMany({
       where: {
         status: 'APPROVED',
+        ...(viewerIsDemo
+          ? {}
+          : { owner: { email: { notIn: DEMO_ACCOUNT_EMAILS } } }),
         ...(q
           ? {
               OR: [
@@ -154,6 +163,13 @@ export class ListingsService {
       if (viewer.role !== UserRole.ADMIN && viewer.id !== listing.ownerId) {
         throw new NotFoundException('listing not found');
       }
+    } else if (
+      isDemoAccountEmail(listing.owner.email) &&
+      !isDemoAccountEmail(viewer?.email) &&
+      viewer?.role !== UserRole.ADMIN &&
+      viewer?.id !== listing.ownerId
+    ) {
+      throw new NotFoundException('listing not found');
     }
 
     return { ...listing, featured: isFeaturedActive(listing) };
