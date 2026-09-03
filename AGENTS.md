@@ -189,10 +189,10 @@ The module must be imported in `app.module.ts`.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `POST` | `/auth/register` | none | creates User + returns `{accessToken, user}`; emails a 6-digit EMAIL_VERIFY code |
-| `POST` | `/auth/login` | none | issue JWT from credentials |
+| `POST` | `/auth/register` | none | creates an unverified User + returns `{user}` (**no accessToken** — registering does not sign in); emails a 6-digit EMAIL_VERIFY code |
+| `POST` | `/auth/login` | none | issues `{accessToken, user}` from credentials; throws 403 `"email not verified"` if `emailVerified` is false, regardless of correct password |
 | `POST` | `/auth/request-email-verification` | none | `{email}` → (re)issues + emails a fresh 6-digit code |
-| `POST` | `/auth/verify-email` | none | `{email, code}` → marks `User.emailVerified = true` |
+| `POST` | `/auth/verify-email` | none | `{email, code}` → marks `User.emailVerified = true` and returns `{accessToken, user}`, since this is the first moment a fresh registration becomes a real session |
 | `POST` | `/auth/forgot-password` | none | `{email}` → issues + emails a 6-digit PASSWORD_RESET code |
 | `POST` | `/auth/reset-password` | none | `{email, code, newPassword}` → consume code + set new hash |
 

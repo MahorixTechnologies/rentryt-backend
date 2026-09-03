@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -146,10 +147,11 @@ export class AuthService {
       data: { code, expiryMinutes: EMAIL_VERIFY_TTL_MINUTES },
     });
 
-    const accessToken = await this.signToken(user.id, user.email, user.role);
-
+    // No accessToken here, deliberately — a registration is not a session
+    // until the email is verified (see verifyEmail(), which is the only
+    // place a fresh account is signed in). login() also refuses unverified
+    // accounts, so an unverified user has zero API access either way.
     return {
-      accessToken,
       user,
       ...(includeRawTokenInResponse() ? { emailVerificationCode: code } : {}),
     };
@@ -189,6 +191,10 @@ export class AuthService {
       throw new UnauthorizedException('invalid credentials');
     }
 
+    if (!user.emailVerified) {
+      throw new ForbiddenException('email not verified');
+    }
+
     const accessToken = await this.signToken(user.id, user.email, user.role);
     const { passwordHash, ...safeUser } = user;
     return { accessToken, user: safeUser };
@@ -221,11 +227,26 @@ export class AuthService {
     };
   }
 
+  /**
+   * Marking the email verified is also the moment a fresh registration
+   * becomes a real session — register() deliberately issues no accessToken,
+   * so this is the first (and, alongside login(), only) place one is
+   * signed. Returns the same {accessToken, user} shape as login() so the
+   * caller can treat a successful verification as an immediate sign-in.
+   */
   async verifyEmail(params: { email: string; code: string }) {
     const email = normalizeEmail(params.email);
     const user = await this.prisma.user.findUnique({
       where: { email },
-      select: { id: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        status: true,
+        emailVerified: true,
+        name: true,
+        phone: true,
+      },
     });
     if (!user) {
       throw new BadRequestException('invalid or expired code');
@@ -244,7 +265,11 @@ export class AuthService {
       }),
     ]);
 
-    return { success: true };
+    const accessToken = await this.signToken(user.id, user.email, user.role);
+    return {
+      accessToken,
+      user: { ...user, emailVerified: true },
+    };
   }
 
   async forgotPassword(emailInput: string) {
