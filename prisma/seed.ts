@@ -99,27 +99,12 @@ async function main() {
     name: 'BlueRock Admin',
   });
 
-  const landlord = await ensureUser({
-    email: 'landlord@bluerock.com',
-    password: 'landlord123',
-    role: UserRole.LANDLORD,
-    phone: '+2348123456789',
-    name: 'BlueRock Landlord',
-  });
-
   const landlord2 = await ensureUser({
     email: 'landlord2@bluerock.com',
     password: 'landlord123',
     role: UserRole.LANDLORD,
     phone: '+2348030000000',
     name: 'BlueRock Landlord 2',
-  });
-
-  const renter = await ensureUser({
-    email: 'renter@bluerock.com',
-    password: 'renter123',
-    role: UserRole.RENTER,
-    name: 'BlueRock Renter',
   });
 
   const renter2 = await ensureUser({
@@ -141,7 +126,7 @@ async function main() {
   const listingDefinitions: ListingSeed[] = [
     {
       id: '00000000-0000-0000-0000-000000000001',
-      ownerId: landlord.id,
+      ownerId: landlord2.id,
       status: 'APPROVED',
       title: 'Modern 2BR Apartment',
       description:
@@ -158,7 +143,7 @@ async function main() {
     },
     {
       id: '00000000-0000-0000-0000-000000000002',
-      ownerId: landlord.id,
+      ownerId: landlord2.id,
       status: 'APPROVED',
       title: 'Cozy 3BR House with Garden',
       description:
@@ -192,7 +177,7 @@ async function main() {
     },
     {
       id: '00000000-0000-0000-0000-000000000004',
-      ownerId: landlord.id,
+      ownerId: landlord2.id,
       status: 'APPROVED',
       title: 'Aurora Retreat',
       description:
@@ -257,7 +242,7 @@ async function main() {
     },
     {
       id: '00000000-0000-0000-0000-000000000007',
-      ownerId: landlord.id,
+      ownerId: landlord2.id,
       status: 'APPROVED',
       title: 'Harbor Glass Loft',
       description:
@@ -298,7 +283,7 @@ async function main() {
     },
     {
       id: '00000000-0000-0000-0000-000000000009',
-      ownerId: landlord.id,
+      ownerId: landlord2.id,
       status: 'APPROVED',
       title: 'Savana Ridge Home',
       description:
@@ -358,7 +343,7 @@ async function main() {
     where: { id: '00000000-0000-0000-0000-0000000000b1' },
     update: {
       listingId: listings[0].id,
-      renterId: renter.id,
+      renterId: renter2.id,
       startDate: booking1Start,
       endDate: booking1End,
       nights: 3,
@@ -371,7 +356,7 @@ async function main() {
     create: {
       id: '00000000-0000-0000-0000-0000000000b1',
       listingId: listings[0].id,
-      renterId: renter.id,
+      renterId: renter2.id,
       startDate: booking1Start,
       endDate: booking1End,
       nights: 3,
@@ -466,7 +451,7 @@ async function main() {
     where: { id: '00000000-0000-0000-0000-0000000000b4' },
     update: {
       listingId: listings[1].id,
-      renterId: renter.id,
+      renterId: renter2.id,
       startDate: booking4Start,
       endDate: booking4End,
       nights: 3,
@@ -479,7 +464,7 @@ async function main() {
     create: {
       id: '00000000-0000-0000-0000-0000000000b4',
       listingId: listings[1].id,
-      renterId: renter.id,
+      renterId: renter2.id,
       startDate: booking4Start,
       endDate: booking4End,
       nights: 3,
@@ -520,7 +505,7 @@ async function main() {
   const report2 = await prisma.report.upsert({
     where: { id: '00000000-0000-0000-0000-0000000000p2' },
     update: {
-      reporterId: renter.id,
+      reporterId: renter2.id,
       targetType: 'USER',
       targetId: landlord2.id,
       reason: 'Host unresponsive after booking confirmed',
@@ -532,7 +517,7 @@ async function main() {
     },
     create: {
       id: '00000000-0000-0000-0000-0000000000p2',
-      reporterId: renter.id,
+      reporterId: renter2.id,
       targetType: 'USER',
       targetId: landlord2.id,
       reason: 'Host unresponsive after booking confirmed',
@@ -548,7 +533,7 @@ async function main() {
   const report3 = await prisma.report.upsert({
     where: { id: '00000000-0000-0000-0000-0000000000p3' },
     update: {
-      reporterId: landlord.id,
+      reporterId: landlord2.id,
       targetType: 'USER',
       targetId: renter2.id,
       reason: 'Suspicious repeated booking cancellations',
@@ -560,7 +545,7 @@ async function main() {
     },
     create: {
       id: '00000000-0000-0000-0000-0000000000p3',
-      reporterId: landlord.id,
+      reporterId: landlord2.id,
       targetType: 'USER',
       targetId: renter2.id,
       reason: 'Suspicious repeated booking cancellations',
@@ -576,7 +561,7 @@ async function main() {
     where: { id: '00000000-0000-0000-0000-0000000000d1' },
     update: {
       bookingId: booking1.id,
-      raisedById: renter.id,
+      raisedById: renter2.id,
       reason: 'Property was not as described - missing amenities promised in the listing.',
       status: 'OPEN',
       resolutionNotes: null,
@@ -586,7 +571,7 @@ async function main() {
     create: {
       id: '00000000-0000-0000-0000-0000000000d1',
       bookingId: booking1.id,
-      raisedById: renter.id,
+      raisedById: renter2.id,
       reason: 'Property was not as described - missing amenities promised in the listing.',
       status: 'OPEN',
     },
@@ -597,7 +582,7 @@ async function main() {
     where: { id: '00000000-0000-0000-0000-0000000000d2' },
     update: {
       bookingId: booking4.id,
-      raisedById: landlord.id,
+      raisedById: landlord2.id,
       reason: 'Renter cancelled last minute and is disputing the refund amount.',
       status: 'RESOLVED',
       resolutionNotes: 'Refund amount confirmed correct per cancellation policy.',
@@ -607,7 +592,7 @@ async function main() {
     create: {
       id: '00000000-0000-0000-0000-0000000000d2',
       bookingId: booking4.id,
-      raisedById: landlord.id,
+      raisedById: landlord2.id,
       reason: 'Renter cancelled last minute and is disputing the refund amount.',
       status: 'RESOLVED',
       resolutionNotes: 'Refund amount confirmed correct per cancellation policy.',
@@ -633,7 +618,7 @@ async function main() {
       {
         id: '00000000-0000-0000-0000-0000000000r1',
         listingId: listings[0].id,
-        renterId: renter.id,
+        renterId: renter2.id,
         rating: 5,
         body: 'Very clean place, great host communication. Would stay again.',
       },
@@ -652,7 +637,7 @@ async function main() {
     where: {
       OR: [
         { userId: renter2.id, type: 'EMAIL_VERIFY' },
-        { userId: renter.id, type: 'PASSWORD_RESET' },
+        { userId: renter2.id, type: 'PASSWORD_RESET' },
       ],
     },
   });
@@ -669,7 +654,7 @@ async function main() {
     prisma.token.create({
       data: {
         token: '111111',
-        userId: renter.id,
+        userId: renter2.id,
         type: 'PASSWORD_RESET',
         expiresAt: new Date(Date.now() + 1000 * 60 * 30),
         usedAt: new Date(),
@@ -680,9 +665,7 @@ async function main() {
 
   return {
     admin,
-    landlord,
     landlord2,
-    renter,
     renter2,
     suspended,
     listings,

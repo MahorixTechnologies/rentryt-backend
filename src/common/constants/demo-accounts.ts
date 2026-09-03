@@ -6,9 +6,7 @@
  */
 export const DEMO_ACCOUNT_EMAILS = [
   'admin@bluerock.com',
-  'landlord@bluerock.com',
   'landlord2@bluerock.com',
-  'renter@bluerock.com',
   'renter2@bluerock.com',
   'suspended@bluerock.com',
 ];

@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import type { StringValue } from 'ms';
 
+import { EmailModule } from '../../common/email/email.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 import { AuthController } from './auth.controller';
@@ -14,6 +15,7 @@ import { JwtStrategy } from './jwt.strategy';
   imports: [
     PassportModule,
     NotificationsModule,
+    EmailModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({

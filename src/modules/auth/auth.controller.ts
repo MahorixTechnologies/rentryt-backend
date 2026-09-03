@@ -43,6 +43,28 @@ export class AuthController {
     });
   }
 
+  @Post('register/send-code')
+  async sendSignupCode(@Body() body: { email?: unknown }) {
+    const email = body.email;
+    if (typeof email !== 'string' || email.trim().length === 0) {
+      throw new BadRequestException('email is required');
+    }
+    return await this.auth.sendSignupCode(email);
+  }
+
+  @Post('register/verify-code')
+  async verifySignupCode(@Body() body: { email?: unknown; code?: unknown }) {
+    const email = body.email;
+    const code = body.code;
+    if (typeof email !== 'string' || email.trim().length === 0) {
+      throw new BadRequestException('email is required');
+    }
+    if (typeof code !== 'string' || code.trim().length === 0) {
+      throw new BadRequestException('code is required');
+    }
+    return await this.auth.verifySignupCode({ email, code });
+  }
+
   @Post('login')
   async login(@Body() body: { email?: unknown; password?: unknown }) {
     const email = body.email;

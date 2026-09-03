@@ -269,6 +269,27 @@ model Token {
   @@index([userId, type])
 }
 
+/**
+ * Proves ownership of an email address BEFORE a User row exists — used by
+ * the web signup flow's "verify email, then set a password" step order.
+ * Unrelated to Token/TokenType, which always requires a userId. `usedAt` is
+ * when the code was confirmed correct; `consumedAt` is when register()
+ * actually spent this verification to create an account (each row can back
+ * at most one successful registration).
+ */
+model SignupVerification {
+  id         String    @id @default(uuid())
+  email      String
+  token      String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  usedAt     DateTime?
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email])
+}
+
 model AuditLog {
   id         String   @id @default(uuid())
   actorId    String?

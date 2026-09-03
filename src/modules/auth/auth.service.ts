@@ -10,6 +10,8 @@ import * as bcrypt from 'bcrypt';
 import { randomInt } from 'crypto';
 import type { StringValue } from 'ms';
 
+import { EmailService } from '../../common/email/email.service';
+import { buildOtpEmailHtml, buildOtpEmailText } from '../../common/email/email-templates';
 import { UserRole } from '../../common/types/auth';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -87,6 +89,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly notifications: NotificationsService,
+    private readonly email: EmailService,
   ) {}
 
   async register(params: {
@@ -115,6 +118,20 @@ export class AuthService {
       throw new BadRequestException('email already registered');
     }
 
+    // Web's signup flow verifies the email BEFORE this call (see
+    // sendSignupCode/verifySignupCode) and only reaches register() once a
+    // SignupVerification row for this email has been confirmed (usedAt set)
+    // and not yet spent (consumedAt null) — in that case the account is
+    // created already-verified and signed in immediately, mirroring
+    // login()'s response shape. Mobile has no such pre-step, so it always
+    // falls through to the legacy path below: an unverified account that
+    // must complete the post-registration verifyEmail() flow before it can
+    // log in at all.
+    const verification = await this.prisma.signupVerification.findFirst({
+      where: { email, usedAt: { not: null }, consumedAt: null },
+      orderBy: { usedAt: 'desc' },
+    });
+
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await this.prisma.user.create({
       data: {
@@ -123,6 +140,7 @@ export class AuthService {
         role,
         phone: params.phone?.trim() || null,
         name: params.name?.trim() || null,
+        emailVerified: Boolean(verification),
       },
       select: {
         id: true,
@@ -133,6 +151,15 @@ export class AuthService {
         phone: true,
       },
     });
+
+    if (verification) {
+      await this.prisma.signupVerification.update({
+        where: { id: verification.id },
+        data: { consumedAt: new Date() },
+      });
+      const accessToken = await this.signToken(user.id, user.email, user.role);
+      return { accessToken, user };
+    }
 
     const code = await this.issueOtp(
       user.id,
@@ -155,6 +182,106 @@ export class AuthService {
       user,
       ...(includeRawTokenInResponse() ? { emailVerificationCode: code } : {}),
     };
+  }
+
+  /**
+   * Step 1 of web's "verify email, then set a password" signup order —
+   * proves ownership of an email address before any User row exists.
+   * Independent of Token/TokenType (which always requires a userId).
+   */
+  async sendSignupCode(emailInput: string) {
+    const email = normalizeEmail(emailInput);
+    const existing = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new BadRequestException('email already registered');
+    }
+
+    await this.prisma.signupVerification.deleteMany({
+      where: { email, consumedAt: null },
+    });
+
+    const code = makeOtp();
+    await this.prisma.signupVerification.create({
+      data: {
+        email,
+        token: code,
+        expiresAt: new Date(Date.now() + EMAIL_VERIFY_TTL_MINUTES * 60 * 1000),
+      },
+    });
+
+    await this.email.send({
+      to: email,
+      subject: 'Verify your email',
+      html: buildOtpEmailHtml({
+        heading: 'Verify your email',
+        intro:
+          'Enter this code to verify your email address and continue creating your BlueRock account.',
+        code,
+        expiryMinutes: EMAIL_VERIFY_TTL_MINUTES,
+      }),
+      text: buildOtpEmailText({
+        heading: 'Verify your email',
+        intro:
+          'Enter this code to verify your email address and continue creating your BlueRock account.',
+        code,
+        expiryMinutes: EMAIL_VERIFY_TTL_MINUTES,
+      }),
+    });
+
+    return {
+      success: true,
+      ...(includeRawTokenInResponse() ? { signupCode: code } : {}),
+    };
+  }
+
+  /**
+   * Step 2 of web's pre-registration email verification — confirms the code
+   * from sendSignupCode(). Idempotent on repeat calls with the already-used
+   * record so a double-submit doesn't error. register() later checks for
+   * this row's `usedAt` to decide whether to create an already-verified,
+   * signed-in account.
+   */
+  async verifySignupCode(params: { email: string; code: string }) {
+    const email = normalizeEmail(params.email);
+    const record = await this.prisma.signupVerification.findFirst({
+      where: { email, consumedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const invalid = () => new BadRequestException('invalid or expired code');
+
+    if (!record) {
+      throw invalid();
+    }
+    if (record.usedAt) {
+      return { success: true };
+    }
+    if (record.expiresAt.getTime() < Date.now()) {
+      throw invalid();
+    }
+    if (record.attempts >= MAX_OTP_ATTEMPTS) {
+      await this.prisma.signupVerification.update({
+        where: { id: record.id },
+        data: { expiresAt: new Date(0) },
+      });
+      throw invalid();
+    }
+    if (record.token !== params.code.trim()) {
+      await this.prisma.signupVerification.update({
+        where: { id: record.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw invalid();
+    }
+
+    await this.prisma.signupVerification.update({
+      where: { id: record.id },
+      data: { usedAt: new Date() },
+    });
+    return { success: true };
   }
 
   async login(params: { email: string; password: string }) {
