@@ -323,6 +323,18 @@ export class AdminService {
     return { data, total, page, pageSize };
   }
 
+  async listing(user: AuthUser, id: string) {
+    this.ensureAdmin(user);
+    const listing = await this.prisma.listing.findUnique({
+      where: { id },
+      include: {
+        owner: { select: { id: true, email: true, name: true, phone: true } },
+      },
+    });
+    if (!listing) throw new NotFoundException('listing not found');
+    return listing;
+  }
+
   async bookings(
     user: AuthUser,
     params: {

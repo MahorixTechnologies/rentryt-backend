@@ -98,6 +98,11 @@ export class AdminController {
     });
   }
 
+  @Get('listings/:id')
+  async listing(@AuthUserParam() user: AuthUser, @Param('id') id: string) {
+    return await this.admin.listing(user, id);
+  }
+
   @Get('bookings/:id')
   async booking(@AuthUserParam() user: AuthUser, @Param('id') id: string) {
     return await this.admin.booking(user, id);
