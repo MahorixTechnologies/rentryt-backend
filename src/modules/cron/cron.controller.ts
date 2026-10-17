@@ -1,6 +1,7 @@
 import { Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 
 import { CronSecretGuard } from '../../common/guards/cron-secret.guard';
+import { StorageSweepJob } from '../../common/storage/storage-sweep.job';
 import { BookingsExpiryJob } from '../bookings/bookings-expiry.job';
 import { RefundsProcessorJob } from '../payments/refunds-processor.job';
 
@@ -12,6 +13,7 @@ import { RefundsProcessorJob } from '../payments/refunds-processor.job';
  *
  *   POST /api/v1/internal/cron/booking-expiry
  *   POST /api/v1/internal/cron/refund-processor
+ *   POST /api/v1/internal/cron/storage-sweep
  *
  * Guarded only by CronSecretGuard (no JwtAuthGuard/RolesGuard — Vercel Cron
  * carries no user session, only the `Authorization: Bearer <CRON_SECRET>`
@@ -28,6 +30,7 @@ export class CronController {
   constructor(
     private readonly bookingsExpiryJob: BookingsExpiryJob,
     private readonly refundsProcessorJob: RefundsProcessorJob,
+    private readonly storageSweepJob: StorageSweepJob,
   ) {}
 
   @Post('booking-expiry')
@@ -42,5 +45,12 @@ export class CronController {
   async refundProcessor() {
     await this.refundsProcessorJob.handleRefundPendingBookings();
     return { ok: true, job: 'refund-processor' };
+  }
+
+  @Post('storage-sweep')
+  @HttpCode(200)
+  async storageSweep() {
+    await this.storageSweepJob.handleAbandonedUploads();
+    return { ok: true, job: 'storage-sweep' };
   }
 }

@@ -39,8 +39,8 @@ const WEAK_PASSWORDS = new Set([
   'monkey',
   'dragon',
   'master',
-  'bluerock',
-  'bluerock123',
+  'rentryt',
+  'rentryt123',
 ]);
 
 function requirePassword(password: unknown) {
@@ -170,7 +170,7 @@ export class AuthService {
     await this.notifications.notify(user.id, {
       type: NotificationType.EMAIL_VERIFICATION,
       title: 'Verify your email',
-      body: `Your BlueRock verification code is ${code}. It expires in ${EMAIL_VERIFY_TTL_MINUTES} minutes.`,
+      body: `Your Rentryt verification code is ${code}. It expires in ${EMAIL_VERIFY_TTL_MINUTES} minutes.`,
       data: { code, expiryMinutes: EMAIL_VERIFY_TTL_MINUTES },
     });
 
@@ -218,14 +218,14 @@ export class AuthService {
       html: buildOtpEmailHtml({
         heading: 'Verify your email',
         intro:
-          'Enter this code to verify your email address and continue creating your BlueRock account.',
+          'Enter this code to verify your email address and continue creating your Rentryt account.',
         code,
         expiryMinutes: EMAIL_VERIFY_TTL_MINUTES,
       }),
       text: buildOtpEmailText({
         heading: 'Verify your email',
         intro:
-          'Enter this code to verify your email address and continue creating your BlueRock account.',
+          'Enter this code to verify your email address and continue creating your Rentryt account.',
         code,
         expiryMinutes: EMAIL_VERIFY_TTL_MINUTES,
       }),
@@ -299,6 +299,10 @@ export class AuthService {
         role: true,
         status: true,
         emailVerified: true,
+        phoneVerified: true,
+        identityVerified: true,
+        identityDocumentType: true,
+        identityDocumentLast4: true,
         name: true,
         phone: true,
         passwordHash: true,
@@ -344,7 +348,7 @@ export class AuthService {
     await this.notifications.notify(user.id, {
       type: NotificationType.EMAIL_VERIFICATION,
       title: 'Verify your email',
-      body: `Your BlueRock verification code is ${code}. It expires in ${EMAIL_VERIFY_TTL_MINUTES} minutes.`,
+      body: `Your Rentryt verification code is ${code}. It expires in ${EMAIL_VERIFY_TTL_MINUTES} minutes.`,
       data: { code, expiryMinutes: EMAIL_VERIFY_TTL_MINUTES },
     });
 
@@ -371,6 +375,10 @@ export class AuthService {
         role: true,
         status: true,
         emailVerified: true,
+        phoneVerified: true,
+        identityVerified: true,
+        identityDocumentType: true,
+        identityDocumentLast4: true,
         name: true,
         phone: true,
       },
@@ -416,7 +424,7 @@ export class AuthService {
     await this.notifications.notify(user.id, {
       type: NotificationType.PASSWORD_RESET,
       title: 'Reset your password',
-      body: `Your BlueRock password reset code is ${code}. It expires in ${PASSWORD_RESET_TTL_MINUTES} minutes. If you didn't request this, you can ignore this email.`,
+      body: `Your Rentryt password reset code is ${code}. It expires in ${PASSWORD_RESET_TTL_MINUTES} minutes. If you didn't request this, you can ignore this email.`,
       data: { code, expiryMinutes: PASSWORD_RESET_TTL_MINUTES },
     });
 
@@ -467,9 +475,52 @@ export class AuthService {
    * previously-issued unused code of the same type first so only the latest
    * one is ever valid (and attempt counts reset with each new code).
    */
+  async requestPhoneVerification(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, phone: true, email: true },
+    });
+    if (!user?.phone?.trim()) {
+      throw new BadRequestException('add a phone number to your profile first');
+    }
+
+    const code = await this.issueOtp(
+      user.id,
+      'PHONE_VERIFY',
+      EMAIL_VERIFY_TTL_MINUTES,
+    );
+
+    await this.notifications.notify(user.id, {
+      type: NotificationType.PHONE_VERIFICATION,
+      title: 'Verify your phone number',
+      body: `Your Rentryt phone verification code is ${code}. It expires in ${EMAIL_VERIFY_TTL_MINUTES} minutes.`,
+      data: { code, expiryMinutes: EMAIL_VERIFY_TTL_MINUTES },
+    });
+
+    return {
+      success: true,
+      ...(includeRawTokenInResponse() ? { phoneVerificationCode: code } : {}),
+    };
+  }
+
+  async verifyPhone(userId: string, code: string) {
+    const record = await this.consumeOtp(userId, 'PHONE_VERIFY', code);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { phoneVerified: true },
+      }),
+      this.prisma.token.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+    return { success: true };
+  }
+
   private async issueOtp(
     userId: string,
-    type: 'EMAIL_VERIFY' | 'PASSWORD_RESET',
+    type: 'EMAIL_VERIFY' | 'PHONE_VERIFY' | 'PASSWORD_RESET',
     ttlMinutes: number,
   ): Promise<string> {
     await this.prisma.token.updateMany({
@@ -499,7 +550,7 @@ export class AuthService {
    */
   private async consumeOtp(
     userId: string,
-    type: 'EMAIL_VERIFY' | 'PASSWORD_RESET',
+    type: 'EMAIL_VERIFY' | 'PHONE_VERIFY' | 'PASSWORD_RESET',
     code: string,
   ) {
     const record = await this.prisma.token.findFirst({

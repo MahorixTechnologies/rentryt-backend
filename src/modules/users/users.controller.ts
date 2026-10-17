@@ -17,26 +17,39 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuthService } from '../auth/auth.service';
+
+import { UsersService } from './users.service';
+
+const meSelect = {
+  id: true,
+  email: true,
+  role: true,
+  status: true,
+  emailVerified: true,
+  phoneVerified: true,
+  identityVerified: true,
+  identityDocumentType: true,
+  identityDocumentLast4: true,
+  name: true,
+  phone: true,
+  createdAt: true,
+} as const;
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auth: AuthService,
+    private readonly users: UsersService,
+  ) {}
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async getMe(@AuthUserParam() user: AuthUser) {
     const dbUser = await this.prisma.user.findUnique({
       where: { id: user.id },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        status: true,
-        emailVerified: true,
-        name: true,
-        phone: true,
-        createdAt: true,
-      },
+      select: meSelect,
     });
     return dbUser;
   }
@@ -56,21 +69,62 @@ export class UsersController {
       throw new BadRequestException('phone must be a string');
     }
 
+    const existing = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { phone: true },
+    });
+    const nextPhone =
+      typeof phone === 'string' ? phone.trim() : undefined;
+    const phoneChanged =
+      nextPhone != null && nextPhone !== (existing?.phone ?? '');
+
     return await this.prisma.user.update({
       where: { id: user.id },
       data: {
         name: typeof name === 'string' ? name.trim() : undefined,
-        phone: typeof phone === 'string' ? phone.trim() : undefined,
+        phone: nextPhone,
+        ...(phoneChanged ? { phoneVerified: false } : {}),
       },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        status: true,
-        emailVerified: true,
-        name: true,
-        phone: true,
-      },
+      select: meSelect,
+    });
+  }
+
+  @Post('me/request-phone-verification')
+  @UseGuards(JwtAuthGuard)
+  async requestPhoneVerification(@AuthUserParam() user: AuthUser) {
+    return await this.auth.requestPhoneVerification(user.id);
+  }
+
+  @Post('me/verify-phone')
+  @UseGuards(JwtAuthGuard)
+  async verifyPhone(
+    @AuthUserParam() user: AuthUser,
+    @Body() body: { code?: unknown },
+  ) {
+    const code = body.code;
+    if (typeof code !== 'string' || code.trim().length === 0) {
+      throw new BadRequestException('code is required');
+    }
+    return await this.auth.verifyPhone(user.id, code);
+  }
+
+  @Post('me/identity')
+  @UseGuards(JwtAuthGuard)
+  async submitIdentity(
+    @AuthUserParam() user: AuthUser,
+    @Body() body: { documentType?: unknown; documentNumber?: unknown },
+  ) {
+    const documentType = body.documentType;
+    const documentNumber = body.documentNumber;
+    if (documentType !== 'NIN' && documentType !== 'VALID_ID') {
+      throw new BadRequestException("documentType must be 'NIN' or 'VALID_ID'");
+    }
+    if (typeof documentNumber !== 'string' || documentNumber.trim().length === 0) {
+      throw new BadRequestException('documentNumber is required');
+    }
+    return await this.users.submitIdentity(user.id, {
+      documentType,
+      documentNumber,
     });
   }
 

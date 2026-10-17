@@ -1,28 +1,21 @@
-import { randomUUID } from 'crypto';
-
 import { Injectable } from '@nestjs/common';
-import { del, put } from '@vercel/blob';
+import { del, head, put } from '@vercel/blob';
 
-import type { StorageService } from './storage.interface';
-
-const BLOB_PREFIX = 'listings/';
-
-function sanitizeFilename(name: string): string {
-  const base = name.split(/[/\\]/).pop() ?? 'file';
-  return base.replace(/[^a-zA-Z0-9._-]/g, '_');
-}
+import type {
+  StoragePresignInput,
+  StoragePresignResult,
+  StorageService,
+} from './storage.interface';
+import { PRESIGN_TTL_SECONDS, buildObjectKey } from './storage.util';
 
 /**
- * Vercel Blob implementation of {@link StorageService}, used when
- * `STORAGE_PROVIDER=vercel-blob` (see storage.module.ts). `put`/`del` read
- * `BLOB_READ_WRITE_TOKEN` from the environment automatically once a Blob
- * store is linked to the Vercel project — it is never passed explicitly
- * here.
+ * Vercel Blob fallback. Client uploads go through
+ * `PUT /api/v1/storage/local/:key`, which calls `upload()`.
  */
 @Injectable()
 export class VercelBlobStorageService implements StorageService {
-  async upload(file: Express.Multer.File): Promise<string> {
-    const pathname = `${BLOB_PREFIX}${randomUUID()}-${sanitizeFilename(file.originalname)}`;
+  async upload(file: Express.Multer.File, key?: string): Promise<string> {
+    const pathname = key ?? buildObjectKey(file.originalname);
     const blob = await put(pathname, file.buffer, {
       access: 'public',
       contentType: file.mimetype,
@@ -30,7 +23,30 @@ export class VercelBlobStorageService implements StorageService {
     return blob.url;
   }
 
-  async delete(url: string): Promise<void> {
-    await del(url);
+  async delete(urlOrKey: string): Promise<void> {
+    try {
+      await del(urlOrKey);
+    } catch {
+      // Idempotent.
+    }
+  }
+
+  async exists(key: string): Promise<boolean> {
+    try {
+      await head(key);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async presign(input: StoragePresignInput): Promise<StoragePresignResult> {
+    const encoded = encodeURIComponent(input.key);
+    return {
+      uploadUrl: `${input.apiBase}/api/v1/storage/local/${encoded}`,
+      publicUrl: `${input.apiBase}/api/v1/storage/local/${encoded}`,
+      headers: { 'Content-Type': input.contentType },
+      expiresIn: PRESIGN_TTL_SECONDS,
+    };
   }
 }

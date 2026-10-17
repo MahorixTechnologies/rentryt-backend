@@ -27,7 +27,9 @@ export const envValidationSchema = Joi.object({
   // to disk under ./uploads — unchanged Docker/self-host/local-dev
   // behavior. 'vercel-blob' switches STORAGE_SERVICE to
   // VercelBlobStorageService for the Vercel serverless deploy.
-  STORAGE_PROVIDER: Joi.string().valid('local', 'vercel-blob').default('local'),
+  STORAGE_PROVIDER: Joi.string()
+    .valid('local', 'r2', 'vercel-blob')
+    .default('local'),
   // Vercel auto-populates this once a Blob store is linked to the project —
   // it is not a token you create by hand. Required only when actually
   // using the vercel-blob provider in production; optional otherwise so
@@ -40,6 +42,31 @@ export const envValidationSchema = Joi.object({
       then: Joi.required(),
       otherwise: Joi.string().optional(),
     }),
+    otherwise: Joi.string().optional(),
+  }),
+  R2_ACCOUNT_ID: Joi.string().when('STORAGE_PROVIDER', {
+    is: 'r2',
+    then: Joi.required(),
+    otherwise: Joi.string().optional(),
+  }),
+  R2_ACCESS_KEY_ID: Joi.string().when('STORAGE_PROVIDER', {
+    is: 'r2',
+    then: Joi.required(),
+    otherwise: Joi.string().optional(),
+  }),
+  R2_SECRET_ACCESS_KEY: Joi.string().when('STORAGE_PROVIDER', {
+    is: 'r2',
+    then: Joi.required(),
+    otherwise: Joi.string().optional(),
+  }),
+  R2_BUCKET: Joi.string().when('STORAGE_PROVIDER', {
+    is: 'r2',
+    then: Joi.required(),
+    otherwise: Joi.string().optional(),
+  }),
+  R2_PUBLIC_BASE_URL: Joi.string().when('STORAGE_PROVIDER', {
+    is: 'r2',
+    then: Joi.required(),
     otherwise: Joi.string().optional(),
   }),
   PAYSTACK_SECRET_KEY: Joi.string().when('NODE_ENV', {
@@ -82,4 +109,6 @@ export const envValidationSchema = Joi.object({
   // to console-logging when neither this nor SMTP_HOST is set.
   EMAIL_USER: Joi.string().optional(),
   EMAIL_PASS: Joi.string().optional(),
+  FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().optional(),
+  FIREBASE_SERVICE_ACCOUNT_PATH: Joi.string().optional(),
 }).unknown(true);

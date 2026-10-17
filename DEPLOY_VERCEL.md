@@ -64,58 +64,47 @@ For Gmail specifically: `EMAIL_PASS` must be a 16-character **App Password**
 (Google Account → Security → App Passwords) — Gmail rejects the account's
 normal login password for SMTP auth.
 
-## 4. File storage (Vercel Blob)
+## 4. File storage (Cloudflare R2)
 
 The local-disk `/uploads` path (`LocalStorageService`) doesn't work on
 Vercel — its filesystem is ephemeral and not shared across function
-instances. A second `StorageService` implementation, `VercelBlobStorageService`
-(`src/common/storage/vercel-blob-storage.service.ts`), is wired in behind the
-same `STORAGE_SERVICE` token, selected via the `STORAGE_PROVIDER` env var.
+instances. Production listing photos use **Cloudflare R2** via
+`R2StorageService` (`src/common/storage/r2-storage.service.ts`). Clients
+ask `POST /api/v1/storage/uploads` for a short-lived presign, PUT the file
+themselves (never through the Nest body), then `complete`. That is the
+supported cloud upload path and it stays under Vercel's ~4.5MB request
+limit.
 
-To enable it on Vercel:
+To enable R2 on Vercel (or any host):
 
-1. In the Vercel dashboard, go to the project → **Storage** → **Create/Connect
-   a Blob store**, and link it to this project. This auto-populates
-   `BLOB_READ_WRITE_TOKEN` in the project's environment variables — you do
-   **not** generate or paste this token by hand.
-2. Set `STORAGE_PROVIDER=vercel-blob` in the production environment's env
-   vars (it defaults to `local`, so leaving it unset keeps the old
-   disk-based behavior — do this deliberately).
+1. Create an R2 bucket and an API token with **Object Read & Write**.
+2. Enable public access or a custom domain; that origin is `R2_PUBLIC_BASE_URL`.
+3. Set bucket CORS so browsers can `PUT` and `HEAD` from the web origin
+   (`*` or the app origin for mobile).
+4. Add a lifecycle rule: abort incomplete multipart uploads after 1 day.
+5. Set `STORAGE_PROVIDER=r2` plus `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+   `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, and `R2_PUBLIC_BASE_URL`. Missing
+   R2 keys fail Joi at boot.
 
-Leave `STORAGE_PROVIDER` unset (or `local`) on the Docker/Cloud Run deploy —
-that path keeps using local disk exactly as before.
+Leave `STORAGE_PROVIDER=local` on Docker/Cloud Run local-dev. `vercel-blob`
+remains a fallback (`BLOB_READ_WRITE_TOKEN` + `STORAGE_PROVIDER=vercel-blob`);
+those uploads still go through `PUT /api/v1/storage/local/:key`.
 
-### Known limitation — upload request body size on Vercel
-
-`POST /listings/:id/images` (`ListingsUploadController`) accepts up to 6
-files at 5MB each, i.e. **up to ~30MB buffered through the function itself**
-before either storage backend ever runs (Multer buffers the whole
-multipart body in memory first). Vercel's default Serverless Function
-request body limit is **~4.5MB**. A single small image uploads fine, but any
-multi-image upload near the stated 6-file/5MB-each limits will be **rejected
-by Vercel before reaching this code** — even though the exact same request
-works fine on the current Docker/Cloud Run deploy, which has no such limit.
-
-Fixing this properly means a client-direct-to-Blob upload flow (the browser/
-app uploads straight to Vercel Blob using a short-lived client token, then
-tells the backend the resulting URL) — that requires changes in
-bluerock-web/bluerock-mobile/bluerock-admin, which is out of scope for this
-backend-only pass. Until that's built, treat multi-image uploads as
-possibly-broken on Vercel specifically, and prefer testing the upload
-endpoint on the Docker path until the client-direct flow exists.
+`POST /listings/:id/images` still works via `storage.upload()` for
+server-side attaches, but hosts should use the presign flow.
 
 ## 5. Scheduled jobs (Vercel Cron)
 
-The two background sweeps that run via `setInterval` on the Docker/Cloud Run
-deploy (`BookingsExpiryJob`, hourly; `RefundsProcessorJob`, every 5 minutes —
-see `src/modules/bookings/bookings-expiry.job.ts` and
-`src/modules/payments/refunds-processor.job.ts`) **do not run at all on
+The background sweeps that run via `setInterval` on the Docker/Cloud Run
+deploy (`BookingsExpiryJob`, hourly; `RefundsProcessorJob`, every 5 minutes;
+`StorageSweepJob`, every 15 minutes) **do not run at all on
 Vercel** — serverless has no long-lived process for `setInterval` to fire on.
-Their logic is also exposed via two secured HTTP endpoints for Vercel Cron
+Their logic is also exposed via secured HTTP endpoints for Vercel Cron
 to call instead:
 
 - `POST /api/v1/internal/cron/booking-expiry`
 - `POST /api/v1/internal/cron/refund-processor`
+- `POST /api/v1/internal/cron/storage-sweep`
 
 Both are guarded by `CronSecretGuard` (`src/common/guards/cron-secret.guard.ts`),
 which checks the request's `Authorization` header equals
@@ -131,7 +120,8 @@ cadence on Vercel):
 ```json
 "crons": [
   { "path": "/api/v1/internal/cron/booking-expiry", "schedule": "0 3 * * *" },
-  { "path": "/api/v1/internal/cron/refund-processor", "schedule": "15 3 * * *" }
+  { "path": "/api/v1/internal/cron/refund-processor", "schedule": "15 3 * * *" },
+  { "path": "/api/v1/internal/cron/storage-sweep", "schedule": "30 3 * * *" }
 ]
 ```
 

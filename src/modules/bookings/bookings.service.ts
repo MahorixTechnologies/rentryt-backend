@@ -18,6 +18,7 @@ import {
   SERVICE_FEE_PERCENT_DEFAULT,
   SERVICE_FEE_PERCENT_KEY,
 } from '../../common/fee-rules/fee-rules.service';
+import { assertRenterBookingEligible } from '../../common/users/renter-booking-eligibility';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   NotificationsService,
@@ -85,20 +86,6 @@ export class BookingsService {
     if (nights <= 0)
       throw new BadRequestException('endDate must be after startDate');
 
-    const overlapping = await this.prisma.booking.findFirst({
-      where: {
-        listingId: listing.id,
-        status: { in: ['PENDING', 'CONFIRMED'] },
-        NOT: {
-          OR: [{ endDate: { lte: start } }, { startDate: { gte: end } }],
-        },
-      },
-      select: { id: true },
-    });
-    if (overlapping) {
-      throw new BadRequestException('selected dates are not available');
-    }
-
     const serviceFeePercent = await this.feeRules.getPercent(
       SERVICE_FEE_PERCENT_KEY,
       SERVICE_FEE_PERCENT_DEFAULT,
@@ -108,30 +95,46 @@ export class BookingsService {
     const serviceFee = Math.round(subtotal * (serviceFeePercent / 100));
     const total = subtotal + serviceFee;
 
-    return await this.prisma.booking.create({
-      data: {
-        listingId: listing.id,
-        renterId,
-        startDate: start,
-        endDate: end,
-        nights,
-        subtotal,
-        serviceFee,
-        total,
-        status: 'PENDING',
-        paymentStatus: 'UNPAID',
-      },
-      include: {
-        listing: {
-          select: {
-            id: true,
-            title: true,
-            location: true,
-            currency: true,
-            pricePerNight: true,
+    return await this.prisma.$transaction(async (tx) => {
+      const overlapping = await tx.booking.findFirst({
+        where: {
+          listingId: listing.id,
+          status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] },
+          NOT: {
+            OR: [{ endDate: { lte: start } }, { startDate: { gte: end } }],
           },
         },
-      },
+        select: { id: true },
+      });
+      if (overlapping) {
+        throw new BadRequestException('selected dates are not available');
+      }
+
+      return await tx.booking.create({
+        data: {
+          listingId: listing.id,
+          renterId,
+          startDate: start,
+          endDate: end,
+          nights,
+          subtotal,
+          serviceFee,
+          total,
+          status: 'PENDING',
+          paymentStatus: 'UNPAID',
+        },
+        include: {
+          listing: {
+            select: {
+              id: true,
+              title: true,
+              location: true,
+              currency: true,
+              pricePerNight: true,
+            },
+          },
+        },
+      });
     });
   }
 
@@ -149,6 +152,20 @@ export class BookingsService {
     if (!listing || !isListingPublic(listing.status)) {
       throw new NotFoundException('listing not found');
     }
+
+    const renterProfile = await this.prisma.user.findUnique({
+      where: { id: renter.id },
+      select: {
+        emailVerified: true,
+        phone: true,
+        phoneVerified: true,
+        identityVerified: true,
+      },
+    });
+    if (!renterProfile) {
+      throw new NotFoundException('user not found');
+    }
+    assertRenterBookingEligible(renterProfile);
 
     return await this.createBookingRecord(
       renter.id,
@@ -278,11 +295,16 @@ export class BookingsService {
     });
     if (!booking) throw new NotFoundException('booking not found');
 
+    if (booking.status !== 'CONFIRMED') {
+      throw new BadRequestException(
+        'booking must be host-approved before marking paid',
+      );
+    }
+
     return await this.prisma.booking.update({
       where: { id: bookingId },
       data: {
         paymentStatus: 'PAID',
-        status: booking.status === 'PENDING' ? 'CONFIRMED' : booking.status,
       },
     });
   }
@@ -298,11 +320,16 @@ export class BookingsService {
     });
     if (!booking) throw new NotFoundException('booking not found');
 
+    if (booking.status !== 'CONFIRMED') {
+      throw new BadRequestException(
+        'booking must be host-approved before payment',
+      );
+    }
+
     return await this.prisma.booking.update({
       where: { id: bookingId },
       data: {
         paymentStatus: 'PAID',
-        status: booking.status === 'PENDING' ? 'CONFIRMED' : booking.status,
       },
     });
   }

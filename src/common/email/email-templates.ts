@@ -1,6 +1,6 @@
 /**
  * Shared HTML shell for transactional emails, branded to match the
- * BlueRock web/admin palette (--primary #1e5bff, --accent #0b2466).
+ * Rentryt web/admin palette (--primary #1e5bff, --accent #0b2466).
  * Kept table-based and inline-styled for compatibility with Gmail/Outlook
  * clients that strip <style> blocks.
  */
@@ -14,7 +14,7 @@ function brandedEmailHtml(bodyHtml: string): string {
           <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;background-color:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 8px 24px rgba(17,24,39,0.08);">
             <tr>
               <td style="background-color:#0b2466;padding:28px 32px;text-align:center;">
-                <span style="font-size:20px;font-weight:800;letter-spacing:-0.2px;color:#ffffff;">BlueRock</span>
+                <span style="font-size:20px;font-weight:800;letter-spacing:-0.2px;color:#ffffff;">Rentryt</span>
               </td>
             </tr>
             <tr>
@@ -25,7 +25,7 @@ function brandedEmailHtml(bodyHtml: string): string {
             <tr>
               <td style="padding:20px 32px;background-color:#f7f9fb;border-top:1px solid rgba(17,24,39,0.08);">
                 <p style="margin:0;font-size:12px;line-height:18px;color:#6b7280;">
-                  This is an automated message from BlueRock. If you didn't request this, you can safely ignore it.
+                  This is an automated message from Rentryt. If you didn't request this, you can safely ignore it.
                 </p>
               </td>
             </tr>

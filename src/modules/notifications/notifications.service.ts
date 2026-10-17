@@ -1,11 +1,12 @@
-import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import type { DevicePlatform, Prisma } from '@prisma/client';
 
 import { EmailService } from '../../common/email/email.service';
 import {
   buildOtpEmailHtml,
   buildOtpEmailText,
 } from '../../common/email/email-templates';
+import { PushService } from '../../common/push/push.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
@@ -16,6 +17,7 @@ import { PrismaService } from '../../prisma/prisma.service';
  */
 export const NotificationType = {
   EMAIL_VERIFICATION: 'EMAIL_VERIFICATION',
+  PHONE_VERIFICATION: 'PHONE_VERIFICATION',
   PASSWORD_RESET: 'PASSWORD_RESET',
   BOOKING_STATUS_CHANGE: 'BOOKING_STATUS_CHANGE',
   LISTING_STATUS_CHANGE: 'LISTING_STATUS_CHANGE',
@@ -36,18 +38,27 @@ export type NotifyParams = {
   data?: Record<string, unknown> | null;
 };
 
+const OTP_TYPES = new Set<string>([
+  NotificationType.EMAIL_VERIFICATION,
+  NotificationType.PHONE_VERIFICATION,
+  NotificationType.PASSWORD_RESET,
+]);
+
+const DEVICE_PLATFORMS = new Set<DevicePlatform>(['IOS', 'ANDROID', 'WEB']);
+
 /**
  * Single call site for "alert this user" — writes an in-app Notification
- * row and sends an email (best-effort; EmailService never throws) via one
- * call. Every module that needs to tell a user something (auth, bookings,
- * listings, payouts, reviews, disputes, admin decisions) should call this
- * instead of writing Notification rows or calling EmailService directly.
+ * row, sends an email (best-effort; EmailService never throws), and fans
+ * the same event out over FCM to every registered device token. Every
+ * module that needs to tell a user something should call this instead of
+ * writing Notification rows or calling EmailService / PushService directly.
  */
 @Injectable()
 export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
+    private readonly push: PushService,
   ) {}
 
   async notify(userId: string, params: NotifyParams) {
@@ -76,7 +87,56 @@ export class NotificationsService {
       });
     }
 
+    if (!OTP_TYPES.has(params.type)) {
+      await this.dispatchPush(userId, notification.id, params);
+    }
+
     return notification;
+  }
+
+  async registerDeviceToken(
+    userId: string,
+    token: string,
+    platform: DevicePlatform,
+  ) {
+    return await this.prisma.deviceToken.upsert({
+      where: { token },
+      create: { userId, token, platform },
+      update: { userId, platform },
+    });
+  }
+
+  async unregisterDeviceToken(userId: string, token: string) {
+    await this.prisma.deviceToken.deleteMany({
+      where: { userId, token },
+    });
+    return { success: true };
+  }
+
+  async markAllRead(userId: string) {
+    await this.prisma.notification.updateMany({
+      where: { userId, read: false },
+      data: { read: true },
+    });
+    return { success: true };
+  }
+
+  parseDevicePlatform(value: unknown): DevicePlatform {
+    if (typeof value !== 'string') {
+      throw new BadRequestException("platform must be 'IOS', 'ANDROID', or 'WEB'");
+    }
+    const platform = value.trim().toUpperCase() as DevicePlatform;
+    if (!DEVICE_PLATFORMS.has(platform)) {
+      throw new BadRequestException("platform must be 'IOS', 'ANDROID', or 'WEB'");
+    }
+    return platform;
+  }
+
+  parseDeviceToken(value: unknown): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new BadRequestException('token is required');
+    }
+    return value.trim();
   }
 
   /**
@@ -89,6 +149,7 @@ export class NotificationsService {
   ): { html: string; text: string } | null {
     if (
       params.type !== NotificationType.EMAIL_VERIFICATION &&
+      params.type !== NotificationType.PHONE_VERIFICATION &&
       params.type !== NotificationType.PASSWORD_RESET
     ) {
       return null;
@@ -101,11 +162,14 @@ export class NotificationsService {
     }
 
     const isReset = params.type === NotificationType.PASSWORD_RESET;
+    const isPhone = params.type === NotificationType.PHONE_VERIFICATION;
     const shared = {
       heading: params.title,
       intro: isReset
-        ? "Enter this code to reset your BlueRock password. If you didn't request this, you can ignore this email."
-        : 'Enter this code to verify your email address and finish setting up your BlueRock account.',
+        ? "Enter this code to reset your Rentryt password. If you didn't request this, you can ignore this email."
+        : isPhone
+          ? 'Enter this code to verify the phone number on your Rentryt account.'
+          : 'Enter this code to verify your email address and finish setting up your Rentryt account.',
       code,
       expiryMinutes,
     };
@@ -115,4 +179,42 @@ export class NotificationsService {
       text: buildOtpEmailText(shared),
     };
   }
+
+  private async dispatchPush(
+    userId: string,
+    notificationId: string,
+    params: NotifyParams,
+  ) {
+    const devices = await this.prisma.deviceToken.findMany({
+      where: { userId },
+      select: { token: true },
+    });
+    if (devices.length === 0) return;
+
+    const result = await this.push.send({
+      tokens: devices.map((device) => device.token),
+      title: params.title,
+      body: params.body,
+      data: toFcmData({
+        type: params.type,
+        notificationId,
+        ...(params.data ?? {}),
+      }),
+    });
+
+    if (result.invalidTokens.length > 0) {
+      await this.prisma.deviceToken.deleteMany({
+        where: { token: { in: result.invalidTokens } },
+      });
+    }
+  }
+}
+
+function toFcmData(data: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value == null || key === 'code') continue;
+    out[key] = typeof value === 'string' ? value : JSON.stringify(value);
+  }
+  return out;
 }

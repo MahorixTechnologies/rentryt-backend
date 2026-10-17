@@ -1,12 +1,27 @@
 export const STORAGE_SERVICE = 'STORAGE_SERVICE';
 
+export type StoragePresignInput = {
+  key: string;
+  contentType: string;
+  filename: string;
+  apiBase: string;
+};
+
+export type StoragePresignResult = {
+  uploadUrl: string;
+  publicUrl: string;
+  headers: Record<string, string>;
+  expiresIn: number;
+};
+
 /**
- * Storage backend seam. `LocalStorageService` is the only implementation
- * today; a future `GcsStorageService` implementing this same interface is a
- * drop-in swap behind the `STORAGE_SERVICE` token — no controller/route
- * changes needed elsewhere when that happens.
+ * Storage backend seam. Implementations: local disk, Cloudflare R2,
+ * Vercel Blob. Controllers talk to StorageUploadsService; this token is
+ * the byte-store underneath.
  */
 export interface StorageService {
   upload(file: Express.Multer.File, key?: string): Promise<string>;
-  delete(url: string): Promise<void>;
+  delete(urlOrKey: string): Promise<void>;
+  exists(key: string): Promise<boolean>;
+  presign(input: StoragePresignInput): Promise<StoragePresignResult>;
 }

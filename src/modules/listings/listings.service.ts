@@ -13,9 +13,14 @@ import {
 import type { AuthUser } from '../../common/types/auth';
 import { UserRole } from '../../common/types/auth';
 import {
+  applyGuestListingCard,
+  applyGuestListingView,
+} from '../../common/listings/listing-guest-view';
+import {
   isFeaturedActive,
   isListingPublic,
 } from '../../common/listings/listing-visibility';
+import { StorageUploadsService } from '../../common/storage/storage-uploads.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const FEATURED_LISTING_DURATION_DAYS = 30;
@@ -61,7 +66,10 @@ const PUBLIC_TYPES: readonly CreateListingInput['type'][] = [
 
 @Injectable()
 export class ListingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storageUploads: StorageUploadsService,
+  ) {}
 
   async listPublic(params: {
     q?: string;
@@ -70,6 +78,7 @@ export class ListingsService {
     maxPrice?: number;
     type?: string;
     rooms?: number;
+    viewer?: AuthUser | null;
     viewerEmail?: string | null;
   }) {
     const q = params.q?.trim();
@@ -79,7 +88,8 @@ export class ListingsService {
       PUBLIC_TYPES.includes(params.type as CreateListingInput['type'])
         ? (params.type as CreateListingInput['type'])
         : undefined;
-    const viewerIsDemo = isDemoAccountEmail(params.viewerEmail);
+    const viewerEmail = params.viewer?.email ?? params.viewerEmail ?? null;
+    const viewerIsDemo = isDemoAccountEmail(viewerEmail);
 
     const listings = await this.prisma.listing.findMany({
       where: {
@@ -128,10 +138,15 @@ export class ListingsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return listings.map((listing) => ({
-      ...listing,
-      featured: isFeaturedActive(listing),
-    }));
+    return listings.map((listing) =>
+      applyGuestListingCard(
+        {
+          ...listing,
+          featured: isFeaturedActive(listing),
+        },
+        params.viewer,
+      ),
+    );
   }
 
   /**
@@ -243,7 +258,72 @@ export class ListingsService {
       throw new NotFoundException('listing not found');
     }
 
-    return { ...listing, featured: isFeaturedActive(listing) };
+    return applyGuestListingView(
+      { ...listing, featured: isFeaturedActive(listing) },
+      viewer,
+    );
+  }
+
+  async checkAvailability(
+    listingId: string,
+    startDate: string,
+    endDate: string,
+    viewer?: AuthUser | null,
+  ) {
+    const listing = await this.prisma.listing.findUnique({
+      where: { id: listingId },
+      select: { id: true, status: true, ownerId: true },
+    });
+    if (!listing) throw new NotFoundException('listing not found');
+    if (!isListingPublic(listing.status)) {
+      if (!viewer) throw new NotFoundException('listing not found');
+      if (viewer.role !== UserRole.ADMIN && viewer.id !== listing.ownerId) {
+        throw new NotFoundException('listing not found');
+      }
+    }
+
+    const start = this.parseAvailabilityDate(startDate);
+    const end = this.parseAvailabilityDate(endDate);
+    const nights = this.diffNights(start, end);
+    if (nights <= 0) {
+      throw new BadRequestException('endDate must be after startDate');
+    }
+
+    const overlapping = await this.prisma.booking.findFirst({
+      where: {
+        listingId,
+        status: { in: ['PENDING', 'CONFIRMED', 'CHECKED_IN'] },
+        NOT: {
+          OR: [{ endDate: { lte: start } }, { startDate: { gte: end } }],
+        },
+      },
+      select: { id: true },
+    });
+
+    return { available: !overlapping, nights };
+  }
+
+  private parseAvailabilityDate(value: string): Date {
+    const trimmed = value.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      throw new BadRequestException('dates must be YYYY-MM-DD');
+    }
+    const [y, m, d] = trimmed.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    if (
+      Number.isNaN(dt.getTime()) ||
+      dt.getUTCFullYear() !== y ||
+      dt.getUTCMonth() !== m - 1 ||
+      dt.getUTCDate() !== d
+    ) {
+      throw new BadRequestException('invalid date');
+    }
+    return dt;
+  }
+
+  private diffNights(start: Date, end: Date) {
+    const ms = end.getTime() - start.getTime();
+    return Math.floor(ms / (1000 * 60 * 60 * 24));
   }
 
   async create(owner: AuthUser, input: CreateListingInput) {
@@ -259,7 +339,7 @@ export class ListingsService {
       throw new BadRequestException('invalid listing fields');
     }
 
-    return await this.prisma.listing.create({
+    const listing = await this.prisma.listing.create({
       data: {
         ownerId: owner.id,
         status: 'PENDING',
@@ -276,6 +356,15 @@ export class ListingsService {
         rules: input.rules,
       },
     });
+
+    await this.storageUploads.syncListingImages({
+      userId: owner.id,
+      listingId: listing.id,
+      nextImages: listing.images,
+      previousImages: [],
+    });
+
+    return listing;
   }
 
   async update(
@@ -289,7 +378,7 @@ export class ListingsService {
       throw new ForbiddenException('not allowed');
     }
 
-    return await this.prisma.listing.update({
+    const updated = await this.prisma.listing.update({
       where: { id },
       data: {
         ...(patch.title != null ? { title: patch.title.trim() } : {}),
@@ -314,6 +403,17 @@ export class ListingsService {
         status: owner.role === UserRole.ADMIN ? listing.status : 'PENDING',
       },
     });
+
+    if (patch.images != null) {
+      await this.storageUploads.syncListingImages({
+        userId: listing.ownerId,
+        listingId: listing.id,
+        nextImages: updated.images,
+        previousImages: listing.images,
+      });
+    }
+
+    return updated;
   }
 
   async appendImages(owner: AuthUser, id: string, urls: string[]) {
@@ -323,10 +423,19 @@ export class ListingsService {
       throw new ForbiddenException('not allowed');
     }
 
-    return await this.prisma.listing.update({
+    const updated = await this.prisma.listing.update({
       where: { id },
       data: { images: { push: urls } },
     });
+
+    await this.storageUploads.syncListingImages({
+      userId: listing.ownerId,
+      listingId: listing.id,
+      nextImages: updated.images,
+      previousImages: listing.images,
+    });
+
+    return updated;
   }
 
   async remove(owner: AuthUser, id: string) {

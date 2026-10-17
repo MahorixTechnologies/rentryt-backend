@@ -1,39 +1,67 @@
-import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
 import { Injectable } from '@nestjs/common';
 
-import type { StorageService } from './storage.interface';
+import type {
+  StoragePresignInput,
+  StoragePresignResult,
+  StorageService,
+} from './storage.interface';
+import { PRESIGN_TTL_SECONDS, buildObjectKey } from './storage.util';
 
-const UPLOAD_DIR = join(process.cwd(), 'uploads', 'listings');
-const PUBLIC_PREFIX = '/uploads/listings';
+const UPLOADS_ROOT = join(process.cwd(), 'uploads');
 
-function sanitizeFilename(name: string): string {
-  const base = name.split(/[/\\]/).pop() ?? 'file';
-  return base.replace(/[^a-zA-Z0-9._-]/g, '_');
+function diskPathForKey(key: string): string {
+  return join(UPLOADS_ROOT, key);
+}
+
+function publicUrlForKey(key: string): string {
+  return `/uploads/${key}`;
+}
+
+function keyFromPublicUrl(url: string): string | null {
+  const marker = '/uploads/';
+  const index = url.indexOf(marker);
+  if (index >= 0) return url.slice(index + marker.length);
+  return null;
 }
 
 /**
- * Dev/self-host implementation of {@link StorageService} — writes to local
- * disk under `./uploads/listings`. Cloud Run's local disk is ephemeral and
- * not shared across instances, so this is not meant to survive a real
- * multi-instance cloud deploy; it exists so the upload flow works today and
- * the `STORAGE_SERVICE` seam has a real implementation to swap out later.
+ * Dev/self-host implementation — writes to `./uploads/<key>`.
  */
 @Injectable()
 export class LocalStorageService implements StorageService {
-  async upload(file: Express.Multer.File): Promise<string> {
-    await fs.mkdir(UPLOAD_DIR, { recursive: true });
-    const filename = `${randomUUID()}-${sanitizeFilename(file.originalname)}`;
-    await fs.writeFile(join(UPLOAD_DIR, filename), file.buffer);
-    return `${PUBLIC_PREFIX}/${filename}`;
+  async upload(file: Express.Multer.File, key?: string): Promise<string> {
+    const objectKey = key ?? buildObjectKey(file.originalname);
+    const dest = diskPathForKey(objectKey);
+    await fs.mkdir(join(dest, '..'), { recursive: true });
+    await fs.writeFile(dest, file.buffer);
+    return publicUrlForKey(objectKey);
   }
 
-  async delete(url: string): Promise<void> {
-    if (!url.startsWith(PUBLIC_PREFIX)) return;
-    const filename = url.slice(PUBLIC_PREFIX.length + 1);
-    if (!filename || filename.includes('/') || filename.includes('..')) return;
-    await fs.rm(join(UPLOAD_DIR, filename), { force: true });
+  async delete(urlOrKey: string): Promise<void> {
+    const key = keyFromPublicUrl(urlOrKey) ?? urlOrKey;
+    if (!key || key.includes('..')) return;
+    await fs.rm(diskPathForKey(key), { force: true });
+  }
+
+  async exists(key: string): Promise<boolean> {
+    try {
+      await fs.access(diskPathForKey(key));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async presign(input: StoragePresignInput): Promise<StoragePresignResult> {
+    const encoded = encodeURIComponent(input.key);
+    return {
+      uploadUrl: `${input.apiBase}/api/v1/storage/local/${encoded}`,
+      publicUrl: `${input.apiBase}${publicUrlForKey(input.key)}`,
+      headers: { 'Content-Type': input.contentType },
+      expiresIn: PRESIGN_TTL_SECONDS,
+    };
   }
 }

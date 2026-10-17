@@ -27,7 +27,7 @@ import type {
 export class NodemailerEmailProvider implements EmailProviderAdapter {
   private readonly logger = new Logger(NodemailerEmailProvider.name);
   private transporter: Transporter | null = null;
-  private defaultFrom = 'no-reply@bluerock.app';
+  private defaultFrom = 'no-reply@rentryt.app';
 
   constructor(private readonly config: ConfigService) {}
 

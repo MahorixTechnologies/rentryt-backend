@@ -1,7 +1,7 @@
-# BlueRock Backend · AGENTS.md
+# Rentryt Backend · AGENTS.md
 
-> Living playbook for anyone — human or agent — working in `bluerock-backend`.
-> Stick to the patterns below so the API stays contract-stable with `bluerock-mobile`, `bluerock-web`, and `bluerock-admin`.
+> Living playbook for anyone — human or agent — working in `rentryt-backend`.
+> Stick to the patterns below so the API stays contract-stable with `rentryt-mobile`, `rentryt-web`, and `rentryt-admin`.
 
 ---
 
@@ -24,7 +24,7 @@
 ## 2. Project Structure
 
 ```
-bluerock-backend/
+rentryt-backend/
 ├── prisma/
 │   ├── migrations/           # committed migration files
 │   ├── schema.prisma         # Prisma schema: models + enums
@@ -35,6 +35,7 @@ bluerock-backend/
 │   │   ├── filters/          # http-exception.filter.ts (standard error JSON)
 │   │   ├── guards/           # JwtAuthGuard, RolesGuard
 │   │   ├── interceptors/     # ResponseInterceptor ({success, data, message})
+│   │   ├── storage/          # R2 / local / vercel-blob adapters + upload sessions
 │   │   └── types/auth.ts
 │   ├── config/
 │   │   └── env.validation.ts # Joi env schema
@@ -118,7 +119,7 @@ All data modeling happens in `prisma/schema.prisma`. Read the existing schema fi
 
 - **Never hand-edit `migrations/` SQL.** Always:
   ```bash
-  cd bluerock-backend
+  cd rentryt-backend
   npx prisma migrate dev --name <short-description>
   ```
 - To apply migrations in prod: `prisma migrate deploy`
@@ -135,9 +136,9 @@ npm run prisma:seed
 Creates these accounts (they are shared with mobile, web, and admin):
 
 ```
-admin@bluerock.com    / admin123     (ADMIN)
-landlord@bluerock.com / landlord123  (LANDLORD)
-renter@bluerock.com   / renter123    (RENTER)
+admin@rentryt.com    / admin123     (ADMIN)
+landlord@rentryt.com / landlord123  (LANDLORD)
+renter@rentryt.com   / renter123    (RENTER)
 + suspended user + bookings + listings (Aurora Retreat, Palmview Estate, The Courtyard Villa, etc.)
 ```
 
@@ -203,6 +204,17 @@ The module must be imported in `app.module.ts`.
 | `GET` | `/users/me` | JWT | current profile |
 | `PATCH` | `/users/me` | JWT | update name / phone |
 
+### 6.2b Notifications & device tokens (`notifications.controller.ts`)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/users/me/notifications` | JWT | in-app notification inbox |
+| `PATCH` | `/users/me/notifications/:id/read` | JWT | mark one notification read |
+| `POST` | `/users/me/device-tokens` | JWT | `{ token, platform: 'IOS' \| 'ANDROID' \| 'WEB' }` upsert FCM/APNs token |
+| `DELETE` | `/users/me/device-tokens` | JWT | `{ token }` unregister this device |
+
+`NotificationsService.notify()` is the single fan-out: it writes the in-app row, emails (best-effort), and sends FCM (best-effort) to every stored device token. OTP types (`EMAIL_VERIFICATION`, `PHONE_VERIFICATION`, `PASSWORD_RESET`) skip push so codes never land on a lock screen. FCM is optional — when `FIREBASE_SERVICE_ACCOUNT_JSON` / `FIREBASE_SERVICE_ACCOUNT_PATH` are unset, push is logged and skipped, same pattern as SMTP.
+
 ### 6.3 Listings
 
 | Method | Path | Auth | Purpose |
@@ -211,6 +223,20 @@ The module must be imported in `app.module.ts`.
 | `GET` | `/listings/:id` | none | single listing detail |
 | `POST` | `/listings` | LANDLORD JWT | create listing (status PENDING by default) |
 | `PATCH` | `/listings/:id` | Owner / ADMIN | update listing |
+
+### 6.3b Storage (`storage.controller.ts`)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `POST` | `/storage/uploads` | LANDLORD / ADMIN JWT | create a `PENDING` `StorageObject` + return a 10-minute presign (`{ id, key, uploadUrl, publicUrl, headers, expiresIn }`). `contentType` must be `image/jpeg\|png\|webp`; `purpose` is `listing-image` |
+| `POST` | `/storage/uploads/:id/complete` | owner | HEAD/exists check, mark `UPLOADED` |
+| `DELETE` | `/storage/uploads/:id` | owner | `DeleteObject` + mark `ABORTED` (PENDING/UPLOADED only; attached images go through listing update) |
+| `PUT` | `/storage/local/:encodedKey` | owner of that key | local-dev / vercel-blob body upload only |
+| `POST` | `/internal/cron/storage-sweep` | cron secret | delete `PENDING`/`UPLOADED` rows past `expiresAt` |
+
+`STORAGE_PROVIDER=local \| r2 \| vercel-blob` (default `local`). R2 is the documented cloud path: clients PUT directly to the presigned URL. Local and vercel-blob reuse `PUT /storage/local/:key`. Listing create/update calls `syncListingImages` — matching owned URLs become `ATTACHED`; dropped listing URLs are deleted. Archiving a listing does **not** delete objects.
+
+R2 bucket CORS must allow `PUT` and `HEAD` from the web origin (`*` or the app origin for mobile). Add a lifecycle rule to abort incomplete multipart uploads after 1 day.
 
 ### 6.4 Bookings
 
@@ -250,7 +276,7 @@ Two paths:
 ### 8.1 DB only (fastest)
 
 ```bash
-cd bluerock-backend
+cd rentryt-backend
 cp .env.example .env
 npm run db:up            # docker compose up -d db → postgres on 5432
 npm run prisma:migrate:dev
@@ -271,7 +297,7 @@ Docker daemon must be running. Without it `docker compose` commands will fail.
 ## 9. Running & Verifying
 
 ```bash
-cd bluerock-backend
+cd rentryt-backend
 npm install
 
 # lint / format
@@ -325,11 +351,14 @@ From `.env.example`:
 
 ```
 PORT=3000
-DATABASE_URL="postgresql://bluerock:bluerock@localhost:5432/bluerock?schema=public"
+DATABASE_URL="postgresql://rentryt:rentryt@localhost:5432/rentryt?schema=public"
 JWT_SECRET="change-me-to-a-long-random-string"
 JWT_EXPIRES_IN="7d"
 CORS_ORIGIN="*"
+STORAGE_PROVIDER=local
 ```
 
 - `JWT_SECRET` must be non-default in production.
 - `DATABASE_URL` host is `localhost` for host-level runs, `db` when running inside docker compose api service.
+- Firebase is optional. Set `FIREBASE_SERVICE_ACCOUNT_JSON` (inline service-account JSON) or `FIREBASE_SERVICE_ACCOUNT_PATH` (path to the downloaded `firebase-adminsdk-*.json`). Without either, in-app + email notifications still work and FCM is skipped.
+- `STORAGE_PROVIDER` defaults to `local` (disk under `./uploads`). Production should use `r2` plus `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, and `R2_PUBLIC_BASE_URL`. Missing R2 keys fail Joi at boot when the provider is `r2`. `vercel-blob` remains a fallback.

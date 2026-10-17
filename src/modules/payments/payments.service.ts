@@ -37,7 +37,7 @@ import {
   verifyPaystackSignature,
 } from './webhook-signature';
 
-const MOBILE_CALLBACK_PREFIX = 'bluerockmobile://';
+const MOBILE_CALLBACK_PREFIX = 'rentrytmobile://';
 
 type InitiateParams = {
   purpose: PaymentPurpose;
@@ -112,6 +112,11 @@ export class PaymentsService {
         throw new ForbiddenException('not allowed');
       if (booking.paymentStatus === 'PAID') {
         throw new BadRequestException('booking is already paid');
+      }
+      if (booking.status !== 'CONFIRMED') {
+        throw new BadRequestException(
+          'booking must be approved by the host before payment',
+        );
       }
 
       amount = booking.total;

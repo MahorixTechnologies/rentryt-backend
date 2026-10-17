@@ -52,7 +52,13 @@ enum Currency {
 
 enum TokenType {
   EMAIL_VERIFY
+  PHONE_VERIFY
   PASSWORD_RESET
+}
+
+enum IdentityDocumentType {
+  NIN
+  VALID_ID
 }
 
 enum BookingStatus {
@@ -127,6 +133,14 @@ enum PayoutStatus {
   FAILED
 }
 
+enum StorageObjectStatus {
+  PENDING
+  UPLOADED
+  ATTACHED
+  ABORTED
+  EXPIRED
+}
+
 model User {
   id                     String                 @id @default(uuid())
   email                  String                 @unique
@@ -134,6 +148,10 @@ model User {
   role                   UserRole               @default(RENTER)
   status                 UserStatus             @default(ACTIVE)
   emailVerified          Boolean                @default(false)
+  phoneVerified          Boolean                @default(false)
+  identityDocumentType   IdentityDocumentType?
+  identityDocumentLast4  String?
+  identityVerified       Boolean                @default(false)
   name                   String?
   phone                  String?
   ownerApplicationStatus OwnerApplicationStatus @default(NONE)
@@ -154,8 +172,10 @@ model User {
   feeRulesUpdated FeeRule[]      @relation("FeeRuleUpdatedBy")
   paymentsMade    Payment[]      @relation("PayerPayments")
   notifications   Notification[]
-  payoutAccount   PayoutAccount?
-  payouts         Payout[]       @relation("OwnerPayouts")
+  deviceTokens    DeviceToken[]
+  payoutAccount    PayoutAccount?
+  payouts          Payout[]        @relation("OwnerPayouts")
+  storageObjects   StorageObject[]
 
   conversationsAsRenter Conversation[] @relation("RenterConversations")
   conversationsAsOwner  Conversation[] @relation("OwnerConversations")
@@ -194,10 +214,11 @@ model Listing {
   // ListingsService.globalSearch()'s raw query, never selected normally.
   searchVector Unsupported("tsvector")?
 
-  bookings      Booking[]
-  reviews       Review[]
-  payments      Payment[]
-  conversations Conversation[]
+  bookings       Booking[]
+  reviews        Review[]
+  payments       Payment[]
+  conversations  Conversation[]
+  storageObjects StorageObject[]
 
   @@index([ownerId])
   @@index([status])
@@ -390,6 +411,24 @@ model Notification {
   @@index([createdAt])
 }
 
+enum DevicePlatform {
+  IOS
+  ANDROID
+  WEB
+}
+
+model DeviceToken {
+  id        String         @id @default(uuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String         @unique
+  platform  DevicePlatform
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([userId])
+}
+
 model FeeRule {
   id          String   @id @default(uuid())
   key         String   @unique
@@ -504,4 +543,25 @@ model Message {
 
   @@index([conversationId])
   @@index([conversationId, createdAt])
+}
+
+model StorageObject {
+  id          String              @id @default(uuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key         String              @unique
+  publicUrl   String
+  purpose     String
+  contentType String
+  status      StorageObjectStatus @default(PENDING)
+  expiresAt   DateTime
+  listingId   String?
+  listing     Listing?            @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([status, expiresAt])
+  @@index([publicUrl])
+  @@index([listingId])
 }

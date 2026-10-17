@@ -5,10 +5,10 @@
  * QA/demos can still see the seeded catalogue).
  */
 export const DEMO_ACCOUNT_EMAILS = [
-  'admin@bluerock.com',
-  'landlord2@bluerock.com',
-  'renter2@bluerock.com',
-  'suspended@bluerock.com',
+  'admin@rentryt.com',
+  'landlord2@rentryt.com',
+  'renter2@rentryt.com',
+  'suspended@rentryt.com',
 ];
 
 export function isDemoAccountEmail(email: string | null | undefined): boolean {

@@ -12,17 +12,25 @@ async function ensureUser(params: {
   name?: string;
   status?: 'ACTIVE' | 'SUSPENDED';
   emailVerified?: boolean;
+  phoneVerified?: boolean;
+  identityVerified?: boolean;
 }) {
   const email = params.email.trim().toLowerCase();
   const passwordHash = await bcrypt.hash(params.password, 12);
   const status = params.status ?? 'ACTIVE';
   const emailVerified = params.emailVerified ?? true;
+  const phoneVerified = params.phoneVerified ?? emailVerified;
+  const identityVerified = params.identityVerified ?? emailVerified;
 
   return await prisma.user.upsert({
     where: { email },
     update: {
       role: params.role,
       emailVerified,
+      phoneVerified,
+      identityVerified,
+      identityDocumentType: identityVerified ? 'NIN' : null,
+      identityDocumentLast4: identityVerified ? '1234' : null,
       status,
       phone: params.phone ?? null,
       name: params.name ?? null,
@@ -33,6 +41,10 @@ async function ensureUser(params: {
       passwordHash,
       role: params.role,
       emailVerified,
+      phoneVerified,
+      identityVerified,
+      identityDocumentType: identityVerified ? 'NIN' : null,
+      identityDocumentLast4: identityVerified ? '1234' : null,
       status,
       phone: params.phone ?? null,
       name: params.name ?? null,
@@ -93,30 +105,30 @@ async function ensureListing(data: ListingSeed) {
 
 async function main() {
   const admin = await ensureUser({
-    email: 'admin@bluerock.com',
+    email: 'admin@rentryt.com',
     password: 'admin123',
     role: UserRole.ADMIN,
-    name: 'BlueRock Admin',
+    name: 'Rentryt Admin',
   });
 
   const landlord2 = await ensureUser({
-    email: 'landlord2@bluerock.com',
+    email: 'landlord2@rentryt.com',
     password: 'landlord123',
     role: UserRole.LANDLORD,
     phone: '+2348030000000',
-    name: 'BlueRock Landlord 2',
+    name: 'Rentryt Landlord 2',
   });
 
   const renter2 = await ensureUser({
-    email: 'renter2@bluerock.com',
+    email: 'renter2@rentryt.com',
     password: 'renter123',
     role: UserRole.RENTER,
-    name: 'BlueRock Renter 2',
+    name: 'Rentryt Renter 2',
     emailVerified: false,
   });
 
   const suspended = await ensureUser({
-    email: 'suspended@bluerock.com',
+    email: 'suspended@rentryt.com',
     password: 'renter123',
     role: UserRole.RENTER,
     name: 'Suspended User',
@@ -137,7 +149,7 @@ async function main() {
       rooms: 2,
       bathrooms: 2,
       type: 'Apartment',
-      imageSeed: 'bluerock-apt',
+      imageSeed: 'rentryt-apt',
       amenities: ['WiFi', 'Air conditioning', 'Kitchen', 'Parking', '24/7 Security'],
       rules: ['No smoking', 'No parties'],
     },
@@ -154,7 +166,7 @@ async function main() {
       rooms: 3,
       bathrooms: 3,
       type: 'House',
-      imageSeed: 'bluerock-cozy-3br-house',
+      imageSeed: 'rentryt-cozy-3br-house',
       amenities: ['Parking', 'Generator', 'Security', 'Garden', 'WiFi', 'Kitchen'],
       rules: ['No pets', 'No parties'],
     },
@@ -171,7 +183,7 @@ async function main() {
       rooms: 1,
       bathrooms: 1,
       type: 'Studio',
-      imageSeed: 'bluerock-studio-city-view',
+      imageSeed: 'rentryt-studio-city-view',
       amenities: ['WiFi', 'Workspace', 'City view', 'Air conditioning'],
       rules: ['No smoking'],
     },
@@ -188,7 +200,7 @@ async function main() {
       rooms: 5,
       bathrooms: 6,
       type: 'House',
-      imageSeed: 'bluerock-aurora-house',
+      imageSeed: 'rentryt-aurora-house',
       amenities: [
         'Infinity pool',
         'Cinema room',
@@ -212,7 +224,7 @@ async function main() {
       rooms: 4,
       bathrooms: 4,
       type: 'House',
-      imageSeed: 'bluerock-palmview-house',
+      imageSeed: 'rentryt-palmview-house',
       amenities: ['Pool terrace', 'Fire pit', 'Outdoor lounge', 'Backup power'],
       rules: ['No pets', 'No events'],
       featured: true,
@@ -230,7 +242,7 @@ async function main() {
       rooms: 4,
       bathrooms: 5,
       type: 'House',
-      imageSeed: 'bluerock-courtyard-villa',
+      imageSeed: 'rentryt-courtyard-villa',
       amenities: [
         'Private courtyard',
         'Pool',
@@ -253,7 +265,7 @@ async function main() {
       rooms: 2,
       bathrooms: 2,
       type: 'Apartment',
-      imageSeed: 'bluerock-harbor-glass-loft',
+      imageSeed: 'rentryt-harbor-glass-loft',
       amenities: [
         'Balcony',
         'Gym',
@@ -277,7 +289,7 @@ async function main() {
       rooms: 2,
       bathrooms: 2,
       type: 'Apartment',
-      imageSeed: 'bluerock-skyline-nest',
+      imageSeed: 'rentryt-skyline-nest',
       amenities: ['Rooftop pool', 'Gym', 'Concierge', 'City view', 'WiFi'],
       rules: ['No smoking', 'No pets', 'No parties'],
     },
@@ -294,7 +306,7 @@ async function main() {
       rooms: 4,
       bathrooms: 4,
       type: 'House',
-      imageSeed: 'bluerock-savana-ridge-home',
+      imageSeed: 'rentryt-savana-ridge-home',
       amenities: [
         'Plunge pool',
         'Fire lounge',
@@ -317,7 +329,7 @@ async function main() {
       rooms: 3,
       bathrooms: 3,
       type: 'EntireProperty',
-      imageSeed: 'bluerock-marina-pearl-residences',
+      imageSeed: 'rentryt-marina-pearl-residences',
       amenities: [
         'Marina',
         'Concierge',

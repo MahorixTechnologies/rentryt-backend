@@ -4,3 +4,5 @@ node_modules
 npm-debug.log
 dist
 uploads
+firebase-service-account.json
+firebase-adminsdk*.json

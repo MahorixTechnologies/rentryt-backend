@@ -21,6 +21,7 @@ import { PayoutsModule } from './modules/payouts/payouts.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { SearchModule } from './modules/search/search.module';
+import { StorageModule } from './common/storage/storage.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -44,6 +45,7 @@ import { UsersModule } from './modules/users/users.module';
     ReportsModule,
     DisputesModule,
     AdminModule,
+    StorageModule,
     CronModule,
   ],
   controllers: [AppController],

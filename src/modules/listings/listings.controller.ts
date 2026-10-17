@@ -125,8 +125,23 @@ export class ListingsController {
       maxPrice: Number.isFinite(max) ? max : undefined,
       type,
       rooms: Number.isFinite(r) ? r : undefined,
+      viewer,
       viewerEmail: viewer?.email ?? null,
     });
+  }
+
+  @Get(':id/availability')
+  async availability(
+    @Param('id') id: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Headers('authorization') authHeader?: string,
+  ) {
+    if (typeof startDate !== 'string' || typeof endDate !== 'string') {
+      throw new BadRequestException('startDate and endDate are required');
+    }
+    const viewer = await this.optionalViewer.decode(authHeader);
+    return await this.listings.checkAvailability(id, startDate, endDate, viewer);
   }
 
   @Get('mine')

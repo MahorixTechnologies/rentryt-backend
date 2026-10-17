@@ -254,7 +254,7 @@ export class PayoutsService {
       recipientCode: account.providerRecipientId ?? undefined,
       accountNumber: account.accountNumber,
       bankCode: account.bankCode,
-      narration: `BlueRock payout${payout.bookingId ? ` for booking ${payout.bookingId}` : ''}`,
+      narration: `Rentryt payout${payout.bookingId ? ` for booking ${payout.bookingId}` : ''}`,
     });
 
     const updated = await this.prisma.payout.update({

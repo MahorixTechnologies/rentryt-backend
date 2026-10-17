@@ -8,6 +8,10 @@
     {
       "path": "/api/v1/internal/cron/refund-processor",
       "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/v1/internal/cron/storage-sweep",
+      "schedule": "30 3 * * *"
     }
   ]
 }
