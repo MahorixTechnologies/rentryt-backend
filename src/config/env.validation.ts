@@ -8,10 +8,10 @@ export const envValidationSchema = Joi.object({
   DATABASE_URL: Joi.string().required(),
   // Direct (unpooled) connection string, used only by `prisma migrate`.
   // Required in production (Vercel/serverless: DATABASE_URL is the pooled
-  // connection the app queries through; DIRECT_URL is the direct one
-  // migrations run over). Optional otherwise — local dev typically points
-  // at a single non-pooled Postgres, so DATABASE_URL alone is enough.
-  DIRECT_URL: Joi.string().when('NODE_ENV', {
+  // connection the app queries through; DATABASE_URL_UNPOOLED is the direct
+  // one migrations run over). Optional otherwise — local dev typically
+  // points at a single non-pooled Postgres, so DATABASE_URL alone is enough.
+  DATABASE_URL_UNPOOLED: Joi.string().when('NODE_ENV', {
     is: 'production',
     then: Joi.required(),
     otherwise: Joi.string().optional(),

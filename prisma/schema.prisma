@@ -10,7 +10,7 @@ datasource db {
   // app uses for every normal query — required for serverless platforms
   // like Vercel, where each function invocation can open its own
   // connection and a pooler keeps that from exhausting Postgres.
-  directUrl = env("DIRECT_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 enum UserRole {

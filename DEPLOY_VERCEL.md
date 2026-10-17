@@ -25,7 +25,7 @@ usually labeled **"pooled connection"** and **"direct connection"**:
   This is what the running app queries through at runtime (PgBouncer-style —
   safe for many concurrent serverless function invocations each opening a
   connection).
-- Copy the **direct (unpooled)** connection string into `DIRECT_URL`. This is
+- Copy the **direct (unpooled)** connection string into `DATABASE_URL_UNPOOLED`. This is
   used only by `prisma migrate deploy`, which the `vercel-build` script runs
   automatically on every deploy.
 
@@ -44,7 +44,7 @@ Set these in the Vercel project's environment variables (Production at minimum):
 - `CORS_ORIGINS` — comma-separated allowlist of your frontend origin(s), e.g.
   `https://your-frontend.example.com,https://admin.example.com`
 - `NODE_ENV=production` — Vercel sets this by default for Production
-  deployments, but confirm it's actually present, since `DIRECT_URL`,
+  deployments, but confirm it's actually present, since `DATABASE_URL_UNPOOLED`,
   `JWT_SECRET`, `PAYSTACK_SECRET_KEY`, `FLUTTERWAVE_SECRET_KEY`, and
   `FLUTTERWAVE_SECRET_HASH` are all validated as **required** once
   `NODE_ENV=production` (see `src/config/env.validation.ts`) — the app will
@@ -161,7 +161,7 @@ regardless of plan.
 - `vercel-build` (in `package.json`) runs `prisma generate && prisma migrate
   deploy && nest build` automatically on every Vercel deploy — idempotent,
   safe to run every time, applies any pending migrations against whatever
-  `DATABASE_URL`/`DIRECT_URL` are configured for that deployment's
+  `DATABASE_URL`/`DATABASE_URL_UNPOOLED` are configured for that deployment's
   environment.
 - The `/uploads` static file route is intentionally **not** part of the
   Vercel path (see step 4 above) — it stays Docker/Cloud-Run-only in
